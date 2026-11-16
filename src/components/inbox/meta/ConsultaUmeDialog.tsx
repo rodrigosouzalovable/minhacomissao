@@ -229,6 +229,8 @@ export function ConsultaUmeDialog({
   const [textoParcela, setTextoParcela] = useState('');
 
   const [vencParcela, setVencParcela] = useState('');
+  const [dataUme, setDataUme] = useState<{ pedida: string; devolvida: string } | null>(null);
+  const [aceitouData, setAceitouData] = useState(false);
   const atualizarParcelaAtraso = async (vencimento?: string) => {
     const digitos = soDigitos(cpf);
     if (digitos.length !== 11) { toast.error('Informe um CPF com 11 dígitos'); return; }
@@ -243,6 +245,8 @@ export function ConsultaUmeDialog({
       setVencParcela(String(p.boleto.vencimento || '').slice(0, 10));
       setTextoParcela(textoParcelaAtualizada(p));
       const devolvido = String(p.boleto.vencimento || '').slice(0, 10);
+      setAceitouData(false);
+      setDataUme(vencimento && devolvido !== vencimento ? { pedida: vencimento, devolvida: devolvido } : null);
       if (vencimento && devolvido !== vencimento) toast.warning(`A UME gerou a cobrança para ${fmtData(devolvido)}, não para ${fmtData(vencimento)}. Confira antes de enviar.`);
       else if (vencimento) toast.success('Valor recalculado pela UME para a nova data');
     } catch (e) {
@@ -546,6 +550,12 @@ export function ConsultaUmeDialog({
                         </Button>
                       </div>
                       {(dataPendente || parcelaLoading) && <p className="col-span-2 text-xs text-destructive">Gerando a cobrança para a nova data. O envio fica liberado quando o valor e o PIX forem atualizados.</p>}
+                      {dataUme && !dataPendente && !parcelaLoading && (
+                        <label className="col-span-2 flex items-start gap-2 rounded border border-destructive/50 p-2 text-xs text-destructive">
+                          <input type="checkbox" className="mt-0.5" checked={aceitouData} onChange={(e) => setAceitouData(e.target.checked)} />
+                          <span>A UME só liberou esta cobrança para {fmtData(dataUme.devolvida)}, não para {fmtData(dataUme.pedida)}. Marque para enviar mesmo assim nessa data.</span>
+                        </label>
+                      )}
                       {parcelaAtual.boleto.invoiceUrl && <a className="col-span-2 text-primary underline" href={parcelaAtual.boleto.invoiceUrl} target="_blank" rel="noreferrer">Abrir boleto (PDF)</a>}
                     </div>
                   )}
@@ -556,8 +566,8 @@ export function ConsultaUmeDialog({
                       <Copy className="mr-2 h-4 w-4" /> Copiar
                     </Button>
                     {onEnviar && (
-                      <AlertDialogAction disabled={dataPendente || parcelaLoading || semLogin} onClick={(e) => {
-                        if (dataPendente || parcelaLoading) { e.preventDefault(); return; }
+                      <AlertDialogAction disabled={dataPendente || parcelaLoading || semLogin || (!!dataUme && !aceitouData)} onClick={(e) => {
+                        if (dataPendente || parcelaLoading || (dataUme && !aceitouData)) { e.preventDefault(); return; }
                         if (!textoParcela.trim()) return;
                         onEnviar(textoParcela);
                         setParcelaAtual(null);

@@ -70,7 +70,18 @@ Deno.serve(async (req) => {
       return json({ success: false, error: msg, message: traduzirErroUme(msg, 'a geração do boleto') });
     }
 
-    const d = r.data as Record<string, unknown>;
+    let d = r.data as Record<string, unknown>;
+    // A UME pode devolver a cobrança já aberta em outra data: repete pelas parcelas dela na data pedida.
+    if (sessao && String(d?.invoiceDueDate ?? vencimento).slice(0, 10) !== vencimento) {
+      const ids = new Set<string>();
+      for (const k of ['installmentIds', 'installmentsIds']) if (Array.isArray((d as any)?.[k])) (d as any)[k].forEach((x: unknown) => ids.add(String(x)));
+      if (Array.isArray((d as any)?.installments)) (d as any).installments.forEach((x: any) => { if (x?.id != null) ids.add(String(x.id)); });
+      if (ids.size) {
+        const r2 = await umeApi.gerarBoletos({ amb: ambiente, token: sessao.token }, [...ids], vencimento, operadorDoToken(sessao.token, sessao.username));
+        const d2 = (Array.isArray(r2.data) ? r2.data[0] : r2.data) as Record<string, unknown>;
+        if (r2.ok && (d2?.pixCode || d2?.invoiceUrl)) d = d2;
+      }
+    }
     const boleto = {
       invoiceId: String(d.id ?? ''),
       valor: Number(d.invoiceTotalValue ?? 0) || null,

@@ -60,6 +60,29 @@ Deno.serve(async (req) => {
         invoiceUrl: String(d.invoiceUrl ?? ''), pixQrCodeUrl: String(d.pixQrCodeUrl ?? ''), ambiente,
       };
     };
+    // A UME pode reaproveitar a cobrança já aberta (outra data). Tenta de novo pelas parcelas
+    // que ela mesma devolveu, pedindo exatamente a data escolhida pelo atendente.
+    const idsDaResposta = (raw: unknown): string[] => {
+      const out = new Set<string>();
+      const visitar = (o: any, prof = 0) => {
+        if (!o || typeof o !== 'object' || prof > 4) return;
+        if (Array.isArray(o)) { o.forEach((x) => visitar(x, prof + 1)); return; }
+        for (const k of ['installmentIds', 'installmentsIds']) if (Array.isArray(o[k])) o[k].forEach((x: unknown) => out.add(String(x)));
+        if (Array.isArray(o.installments)) o.installments.forEach((x: any) => { if (x?.id != null) out.add(String(x.id)); });
+        Object.values(o).forEach((v) => visitar(v, prof + 1));
+      };
+      visitar(raw);
+      return [...out];
+    };
+    const naDataEscolhida = async (raw: unknown, b: ReturnType<typeof lerBoleto>) => {
+      if (!escolhido || b.vencimento === escolhido) return b;
+      const ids = idsDaResposta(raw);
+      if (!ids.length) return b;
+      const r2 = await umeApi.gerarBoletos(alvo, ids, escolhido, operador);
+      if (!r2.ok) return b;
+      const b2 = lerBoleto(r2.data, escolhido);
+      return (b2.pixCode || b2.invoiceUrl) ? b2 : b;
+    };
     const registrar = (b: ReturnType<typeof lerBoleto>) => db.from('ume_boleto_log').insert({ user_id: caller.userId, cpf, borrower_id: String(cli!.borrower_id), invoice_id: b.invoiceId || null, valor: b.valor, vencimento: b.vencimento, invoice_url: b.invoiceUrl || null, origem: 'atendente', ambiente, ume_username: sessao.username });
 
     if (!acordo) {
@@ -71,10 +94,10 @@ Deno.serve(async (req) => {
           const msg = String((r.data as any)?.message || (r.data as any)?.error || `ume_http_${r.status}`);
           return json({ success: false, message: traduzirErroUme(msg, 'a atualização da parcela') });
         }
-        const boleto = lerBoleto(r.data, escolhido ?? hoje);
+        const boleto = await naDataEscolhida(r.data, lerBoleto(r.data, escolhido ?? hoje));
         if (!boleto.pixCode && !boleto.invoiceUrl) return json({ success: false, message: 'A UME não devolveu PIX nem boleto.' });
         await registrar(boleto);
-        return json({ success: true, origem: 'compra_original', contrato: null, boleto, atrasada: true, nome: cli.nome ?? '',
+        return json({ divergente: !!escolhido && boleto.vencimento !== escolhido, success: true, origem: 'compra_original', contrato: null, boleto, atrasada: true, nome: cli.nome ?? '',
           parcela: { numero: 1, total: 1, valorOriginal: null, vencimentoOriginal: null } });
       }
       let q = db.from('ume_carteira_parcelas').select('installment_id, contrato, vencimento, valor').eq('cpf', cpf);
@@ -87,10 +110,10 @@ Deno.serve(async (req) => {
           const msg = String((r.data as any)?.message || (r.data as any)?.error || `ume_http_${r.status}`);
           return json({ success: false, message: traduzirErroUme(msg, 'a atualização da parcela') });
         }
-        const boleto = lerBoleto(r.data, escolhido ?? hoje);
+        const boleto = await naDataEscolhida(r.data, lerBoleto(r.data, escolhido ?? hoje));
         if (!boleto.pixCode && !boleto.invoiceUrl) return json({ success: false, message: 'A UME não devolveu PIX nem boleto.' });
         await registrar(boleto);
-        return json({ success: true, origem: 'compra_original', contrato: null, boleto, atrasada: true, nome: cli.nome ?? '',
+        return json({ divergente: !!escolhido && boleto.vencimento !== escolhido, success: true, origem: 'compra_original', contrato: null, boleto, atrasada: true, nome: cli.nome ?? '',
           parcela: { numero: 1, total: 1, valorOriginal: null, vencimentoOriginal: null } });
       }
       const p: any = lista[0];
@@ -102,11 +125,11 @@ Deno.serve(async (req) => {
         const msg = String((r.data as any)?.message || (r.data as any)?.error || `ume_http_${r.status}`);
         return json({ success: false, message: traduzirErroUme(msg, 'a atualização da parcela') });
       }
-      const boleto = lerBoleto(r.data, venc);
+      const boleto = await naDataEscolhida(r.data, lerBoleto(r.data, venc));
       if (!boleto.pixCode && !boleto.invoiceUrl) return json({ success: false, message: 'A UME não devolveu PIX nem boleto.' });
       await registrar(boleto);
       return json({
-        success: true, origem: 'compra_original', contrato: p.contrato ?? null, boleto, atrasada, nome: cli.nome ?? '',
+        divergente: !!escolhido && boleto.vencimento !== escolhido, success: true, origem: 'compra_original', contrato: p.contrato ?? null, boleto, atrasada, nome: cli.nome ?? '',
         parcela: { numero: 1, total: doContrato.length, valorOriginal: p.valor, vencimentoOriginal: p.vencimento },
       });
     }
@@ -124,12 +147,12 @@ Deno.serve(async (req) => {
       const msg = String((r.data as any)?.message || (r.data as any)?.error || `ume_http_${r.status}`);
       return json({ success: false, message: traduzirErroUme(msg, 'a atualização da parcela') });
     }
-    const boleto = lerBoleto(r.data, venc);
+    const boleto = await naDataEscolhida(r.data, lerBoleto(r.data, venc));
     if (!boleto.pixCode && !boleto.invoiceUrl) return json({ success: false, message: 'A UME não devolveu PIX nem boleto.' });
     await registrar(boleto);
 
     return json({
-      success: true, origem: 'acordo', boleto, atrasada, nome: acordo.cliente_nome,
+      divergente: !!escolhido && boleto.vencimento !== escolhido, success: true, origem: 'acordo', boleto, atrasada, nome: acordo.cliente_nome,
       parcela: { numero: parcela.numero_parcela, total: lista.length, valorOriginal: parcela.valor_parcela, vencimentoOriginal: parcela.data_prevista },
     });
   } catch (e) {
