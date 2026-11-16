@@ -175,6 +175,14 @@ Deno.serve(async (req) => {
                 valor, vencimento: vencIso, invoice_url: String(d.invoiceUrl ?? '') || null, origem: 'iago_boleto_imediato', ambiente,
               });
               await supabase.rpc('iago_finish_message', { p_contato_id: contato_id, p_entrada_id: String(entrada_id) });
+              // Lembrete único 2h depois se o cliente não voltar a falar (janela de 24h aberta, sem custo de modelo).
+              try {
+                const { data: est } = await supabase.from('iago_conversa_estado').select('id,contexto').eq('contato_id', contato_id).maybeSingle();
+                if (est?.id) await supabase.from('iago_conversa_estado').update({
+                  followup_em: new Date(Date.now() + 2 * 3600_000).toISOString(), followup_feito: false, followup_etapa: 0,
+                  contexto: { ...((est as any).contexto || {}), pix_enviado_em: new Date().toISOString() },
+                }).eq('id', est.id);
+              } catch (_) { /* noop */ }
               console.log('[IAGO] boleto imediato enviado', { contato_id, cpf: mask(cpfBol), credor: credorCaixa });
               return json({ success: true, etapa: 'boleto_imediato' });
             }

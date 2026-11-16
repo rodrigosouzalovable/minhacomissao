@@ -29,17 +29,17 @@ const DIAS = ['domingo', 'segunda-feira', 'terça-feira', 'quarta-feira', 'quint
 const dia = (iso: string) => new Date(`${iso}T12:00:00Z`);
 const somar = (iso: string, n: number) => new Date(dia(iso).getTime() + n * 86400000).toISOString().slice(0, 10);
 
-/** Vencimentos lembrados hoje: amanhã; no sábado também segunda (domingo não envia). */
+/** Vencimentos lembrados hoje: o próprio dia (D-0) e amanhã (D-1); no sábado também segunda (domingo não envia). */
 export function datasAlvoPreventivo(hoje: string): string[] {
   const semana = dia(hoje).getUTCDay();
   if (semana === 0) return [];
-  return semana === 6 ? [somar(hoje, 1), somar(hoje, 2)] : [somar(hoje, 1)];
+  return semana === 6 ? [hoje, somar(hoje, 1), somar(hoje, 2)] : [hoje, somar(hoje, 1)];
 }
 
 /** Texto do {{3}}: "10/11/2026 (amanhã)" ou "16/11/2026 (segunda-feira)". */
 export function rotuloVencimento(venc: string, hoje: string): string {
   const [y, m, d] = venc.split('-');
-  const quando = venc === somar(hoje, 1) ? 'amanhã' : DIAS[dia(venc).getUTCDay()];
+  const quando = venc === hoje ? 'hoje' : venc === somar(hoje, 1) ? 'amanhã' : DIAS[dia(venc).getUTCDay()];
   return `${d}/${m}/${y} (${quando})`;
 }
 

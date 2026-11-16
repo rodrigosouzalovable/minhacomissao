@@ -3,16 +3,17 @@ import { datasAlvoPreventivo, rotuloVencimento, montarClientesPreventivo } from 
 
 describe('lembrete preventivo D-1', () => {
   it('segunda a sexta lembra só quem vence amanhã', () => {
-    expect(datasAlvoPreventivo('2026-11-09')).toEqual(['2026-11-10']);
+    expect(datasAlvoPreventivo('2026-11-09')).toEqual(['2026-11-09', '2026-11-10']);
   });
   it('sábado lembra domingo e segunda', () => {
-    expect(datasAlvoPreventivo('2026-11-14')).toEqual(['2026-11-15', '2026-11-16']);
+    expect(datasAlvoPreventivo('2026-11-14')).toEqual(['2026-11-14', '2026-11-15', '2026-11-16']);
   });
   it('domingo não envia', () => {
     expect(datasAlvoPreventivo('2026-11-15')).toEqual([]);
   });
   it('rótulo do vencimento', () => {
     expect(rotuloVencimento('2026-11-10', '2026-11-09')).toBe('10/11/2026 (amanhã)');
+    expect(rotuloVencimento('2026-11-09', '2026-11-09')).toBe('09/11/2026 (hoje)');
     expect(rotuloVencimento('2026-11-16', '2026-11-14')).toBe('16/11/2026 (segunda-feira)');
   });
   it('um envio por telefone, credor correto e sufixos já acionados ficam de fora', () => {

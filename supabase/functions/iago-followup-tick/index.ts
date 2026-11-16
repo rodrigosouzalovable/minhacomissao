@@ -320,7 +320,11 @@ Deno.serve(async (req) => {
 
 
       let texto = '';
-      if (etapa === 1 && propostaEnviada) {
+      const pixEnviadoEm = est.contexto?.pix_enviado_em ? new Date(est.contexto.pix_enviado_em).getTime() : 0;
+      const pixPendente = etapa === 1 && pixEnviadoEm > Date.now() - 6 * HORA;
+      if (pixPendente) {
+        texto = `${nome ? `Oi, ${nome}! ` : 'Oi! '}Vi que você gerou o PIX da sua parcela. Conseguiu concluir o pagamento? Se precisar de ajuda, é só me chamar aqui. 🙏`;
+      } else if (etapa === 1 && propostaEnviada) {
         const base = String(cfg.followup_texto || 'Oi, tudo bem? Só passando pra saber se você viu a proposta que te mandei.');
         texto = nome ? `${nome}, ${base.charAt(0).toLowerCase()}${base.slice(1)}` : base;
       } else {
@@ -361,7 +365,8 @@ Deno.serve(async (req) => {
         await supabase.from('iago_conversa_estado').update({
           followup_feito: true,
           followup_em: null,
-          followup_etapa: Math.max(Number(est.followup_etapa || 0), etapa),
+          // Lembrete do PIX é único: não segue para as retomadas de 12h/23h.
+          followup_etapa: pixPendente ? 3 : Math.max(Number(est.followup_etapa || 0), etapa),
           etapa: 'followup',
           ultima_msg_em: new Date().toISOString(),
           contexto: {

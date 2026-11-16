@@ -23,7 +23,7 @@ const agoraBRT = () => new Date(Date.now() - 3 * 3600_000);
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
-  const caller = await requireCaller(req, { user: 'admin', corsHeaders });
+  const caller = await requireCaller(req, { user: 'admin', scheduler: true, corsHeaders });
   if (caller instanceof Response) return caller;
   const url = Deno.env.get('SUPABASE_URL')!;
   const key = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -52,6 +52,8 @@ Deno.serve(async (req) => {
 
   // Complemento: desconta o que as campanhas de hoje já incluíram, por credor.
   const jaHoje = { ume: 0, odres_cred: 0 };
+  // Lote das 08h leva metade; o complemento das 12h30 completa o limite do dia.
+  const fator = !complemento && !extraCredor ? 0.5 : 1;
   if (complemento) {
     const { data: jh } = await db.from('envio_meta_job').select('id').eq('user_id', DONO)
       .ilike('nome_campanha', `${prefixo}%`);
@@ -67,8 +69,8 @@ Deno.serve(async (req) => {
   // Resultado único em JSON: a consulta por linhas era cortada em 1.000 pela API (500 por credor).
   const { data: cand, error } = await db.rpc('carteira_sftp_candidatos_json', {
     p_dias_ume: DIAS_FADIGA.ume, p_dias_odres: DIAS_FADIGA.odres_cred,
-    p_limite_ume: extraCredor ? (extraCredor === 'ume' ? extraLimite : 0) : Math.max(0, LIMITE.ume - jaHoje.ume),
-    p_limite_odres: extraCredor ? (extraCredor === 'odres_cred' ? extraLimite : 0) : Math.max(0, LIMITE.odres_cred - jaHoje.odres_cred),
+    p_limite_ume: extraCredor ? (extraCredor === 'ume' ? extraLimite : 0) : Math.max(0, Math.round(LIMITE.ume * fator) - jaHoje.ume),
+    p_limite_odres: extraCredor ? (extraCredor === 'odres_cred' ? extraLimite : 0) : Math.max(0, Math.round(LIMITE.odres_cred * fator) - jaHoje.odres_cred),
   });
   if (error) return json({ success: false, error: error.message }, 500);
   const lista = (Array.isArray(cand) ? cand : []) as Array<{ cpf: string; nome: string; telefone: string; credor: 'ume' | 'odres_cred'; avista: number; atraso: number; novo: boolean; score: number }>;
