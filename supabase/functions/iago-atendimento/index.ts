@@ -288,6 +288,10 @@ Deno.serve(async (req) => {
       // são lidas depois pelo dono; o IAGO responde mesmo assim, limitado pelo teto de respostas.
       if (parada === 'robo' && mercadoUsa) parada = null;
       if (parada === 'intervalo') return json({ success: true, skipped: 'vendas: resposta recente' });
+      // Cada envio custa: se a mensagem mais recente já é resposta do IAGO, não responde de novo.
+      if (lista[0] && lista[0].direcao === 'saida' && !lista[0].template_nome) {
+        return json({ success: true, skipped: 'vendas: aguardando cliente' });
+      }
       if (parada) {
         await supabase.from('iago_conversa_estado')
           .update({ etapa: 'vendas_encerrado', followup_em: null, followup_feito: true }).eq('id', estado.id);
@@ -1277,6 +1281,9 @@ Deno.serve(async (req) => {
       console.log('[IAGO] escalada por dúvida', { contato_id, motivo, avisouCliente: mensagens.length > 0 });
     }
 
+    // Vendas B2B: no máximo 1 mensagem por resposta (cada envio é cobrado pela Meta).
+    if (modoVendas && mensagens.length > 1) mensagens = mensagens.slice(0, 1);
+
     // Aquecimento: a conversa nunca pode ficar sem resposta.
     if (modoAquecimento && !modoVendas && !mensagens.length) {
       const pn = primeiroNome(nomeCliente);
@@ -1500,7 +1507,7 @@ async function gerarResposta(args: {
       'PACOTES: Essencial R$ 997 (até 3.000 contatos, 1 campanha) e Completo R$ 1.490 (até 5.000 contatos, 2 campanhas, ex.: Black Friday + Natal). Pagamento via PIX; começamos em até 24h após o pagamento. Não invente outros preços, descontos ou garantias de faturamento.',
       'ROTEIRO: 1) Se perguntarem "qual mensagem?", explique em 1-2 frases que é uma ação de vendas de fim de ano para empresas de Goiânia e pergunte se eles têm lista de clientes no WhatsApp. 2) Entenda o negócio (segmento, tamanho da base). 3) Apresente o pacote mais adequado com o benefício principal. 4) Responda objeções com calma (custo: 1 venda extra já paga; bloqueio: é número oficial). 5) Feche: pergunte qual pacote prefere e diga que o responsável já envia o PIX e o contrato nesta conversa.',
       'ENCERRAR: marque "encerrar":true e "mensagens":[] quando a empresa não tiver interesse, recusar, pedir para parar, disser que não compartilha lista de clientes, ou quando o outro lado for robô/assistente virtual/resposta automática. Não mande despedida.',
-      'Escreva como pessoa real: 1 a 3 linhas por mensagem, no máximo 2 mensagens, no máximo 1 emoji, termine com uma pergunta quando fizer sentido. Não repita o que já foi dito no histórico. Nunca diga que é IA ou robô; se perguntarem diretamente, diga que é da equipe comercial.',
+      'Escreva como pessoa real: EXATAMENTE 1 mensagem curta (até 2 linhas) por resposta, pois cada mensagem é cobrada; no máximo 1 emoji, termine com uma pergunta quando fizer sentido. Não repita o que já foi dito no histórico. Nunca diga que é IA ou robô; se perguntarem diretamente, diga que é da equipe comercial.',
       'INTERESSE: marque "interessado":true quando a empresa demonstrar interesse real (pergunta preço, como funciona, pacotes, diz que tem lista de clientes, quer fechar ou pede PIX). Em "interesse_resumo" resuma em até 15 palavras.',
       'Responda SOMENTE com JSON válido: {"mensagens":["texto"],"escalar":false,"motivo":"","interessado":false,"interesse_resumo":"","encerrar":false}',
     ].join('\n');

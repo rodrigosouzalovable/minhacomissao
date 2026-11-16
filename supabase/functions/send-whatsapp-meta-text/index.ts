@@ -6,6 +6,7 @@ import { aplicarEtiquetaAtendente } from '../_shared/etiqueta-atendente.ts';
 import { rotuloInstancia } from '../_shared/rotulo-instancia.ts';
 import { ehNumeroInacessivel, MSG_NUMERO_INACESSIVEL, tratarNumeroInacessivel } from '../_shared/meta-numero-inacessivel.ts';
 import { ehContaBloqueada, MSG_CONTA_BLOQUEADA, tratarContaBloqueada } from '../_shared/meta-conta-bloqueada.ts';
+import { telefoneMeta } from '../_shared/meta-destinatario.ts';
 import { authorizeMetaInboxSend } from '../_shared/meta-inbox-send-auth.ts';
 
 
@@ -17,7 +18,8 @@ const corsHeaders = {
 function formatTel(tel: string): string {
   const d = (tel || '').replace(/\D/g, '');
   if (!d) return '';
-  return d.startsWith('55') || d.length > 11 ? d : `55${d}`;
+  // Mesma regra dos templates: reconhece números dos EUA/Canadá (+1) sem prefixar 55.
+  return telefoneMeta(tel) || (d.startsWith('55') || d.length > 11 ? d : `55${d}`);
 }
 
 const MSG_DESTINATARIO_SEM_WHATSAPP =
