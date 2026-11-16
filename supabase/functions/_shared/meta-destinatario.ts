@@ -6,7 +6,10 @@ export function telefoneMeta(raw: string): string | null {
   if (!digits) return null;
   const explicitInternational = input.startsWith('+') || input.startsWith('00');
   const international = input.startsWith('00') ? digits.slice(2) : digits;
-  const normalized = explicitInternational || /^1555\d{7}$/.test(digits)
+  // 11 digits starting with 1 whose third digit is not 9 cannot be a Brazilian
+  // mobile (DDD 1x + 9); treat as a US/Canada number (+1).
+  const nanp = /^1[2-9]\d{2}[2-9]\d{6}$/.test(digits) && digits[2] !== '9';
+  const normalized = explicitInternational || nanp || /^1555\d{7}$/.test(digits)
     ? international
     : digits.startsWith('55') && (digits.length === 12 || digits.length === 13)
       ? digits
