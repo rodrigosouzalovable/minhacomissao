@@ -18,7 +18,7 @@ import {
 import { consultarUme, propostaDaUme } from '../_shared/ume-desconto.ts';
 import { umeApi } from '../_shared/ume-api.ts';
 import { detectarPropostaPreviaNoHistorico, type PropostaPrevia } from '../_shared/proposta-previa.ts';
-import { ehPedidoBoletoImediato, credorBoletoAutomatico, vencimentoDiaUtil } from '../_shared/boleto-imediato.ts';
+import { ehBotaoQueroBoleto, credorBoletoAutomatico, vencimentoDiaUtil, valorParcelaAcordo, valorCompativelComParcela } from '../_shared/boleto-imediato.ts';
 import { atenderRespostaCadastral } from '../_shared/recuperacao-cadastral-resposta.ts';
 
 const MSG_NUMERO_ERRADO = 'Entendi, obrigado pela atenção e desculpe o incômodo. Tenha um ótimo dia! 🙏';
@@ -136,7 +136,7 @@ Deno.serve(async (req) => {
 
 
     // ===== Pedido de boleto/PIX (UME/Odres Cred): responde na hora, mesmo com atendente humano =====
-    if (!modoAquecimento && ehPedidoBoletoImediato(String(texto || '')) && credorBoletoAutomatico(credorCaixa || '')) {
+    if (!modoAquecimento && ehBotaoQueroBoleto(String(texto || '')) && credorBoletoAutomatico(credorCaixa || '')) {
       try {
         let cpfBol = soDigitos(String((contato as any).cpf || ''));
         if (cpfBol.length !== 11 && cpfBol.length !== 14) {
@@ -155,6 +155,11 @@ Deno.serve(async (req) => {
               const d = r.data as Record<string, unknown>;
               const valor = Number(d.invoiceTotalValue ?? 0) || null;
               const vencIso = String(d.invoiceDueDate ?? venc).slice(0, 10);
+              const parcelaAc = await valorParcelaAcordo(supabase, cpfBol);
+              if (!valorCompativelComParcela(valor, parcelaAc)) {
+                console.warn('[IAGO] boleto bloqueado: valor diferente da parcela', { contato_id, valor, parcelaAc });
+                return json({ success: false, skipped: 'valor da cobrança não confere com a parcela do acordo' });
+              }
               const nome = String((contato as any).nome || consulta.nome || '').trim();
               const txt = [
                 `Prontinho${nome ? `, ${primeiroNome(nome)}` : ''}! Segue sua parcela atualizada da ${credorCaixa} 🙏`,
@@ -907,6 +912,11 @@ Deno.serve(async (req) => {
           const d = r.data as Record<string, unknown>;
           const valor = Number(d.invoiceTotalValue ?? 0) || null;
           const vencIso = String(d.invoiceDueDate ?? venc).slice(0, 10);
+          const parcelaRep = await valorParcelaAcordo(supabase, cpf);
+          if (!valorCompativelComParcela(valor, parcelaRep)) {
+            console.warn('[IAGO] repescagem bloqueada: valor diferente da parcela', { valor, parcelaRep });
+            return false;
+          }
           const txt = [
             `Prontinho${nomeCliente0 ? `, ${primeiroNome(nomeCliente0)}` : ''}! Segue sua parcela atualizada 🙏`,
             '',
@@ -983,7 +993,7 @@ Deno.serve(async (req) => {
     }
 
     // ===== Pedido de boleto/PIX em conversa UME => gera pela API oficial e responde na hora =====
-    if (cpf && !modoAquecimento && credorBoletoAutomatico(credorCaixa) && ehPedidoBoleto(textoAtual)) {
+    if (false && cpf && !modoAquecimento && credorBoletoAutomatico(credorCaixa) && ehPedidoBoleto(textoAtual)) { // desligado: só o botão QUERO O BOLETO envia
       try {
         const idSftpBol = await borrowerIdSftp(supabase, cpf);
         const consultaBol = idSftpBol ?? await consultarUme(supabase, cpf, { perfil: 'essencial', aguardarCache: false });
