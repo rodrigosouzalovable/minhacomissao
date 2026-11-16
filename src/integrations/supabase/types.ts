@@ -5867,6 +5867,30 @@ export type Database = {
           },
         ]
       }
+      meta_envio_diario_telefone: {
+        Row: {
+          created_at: string
+          dia: string
+          instancia_id: string | null
+          sufixo: string
+          template_nome: string | null
+        }
+        Insert: {
+          created_at?: string
+          dia: string
+          instancia_id?: string | null
+          sufixo: string
+          template_nome?: string | null
+        }
+        Update: {
+          created_at?: string
+          dia?: string
+          instancia_id?: string | null
+          sufixo?: string
+          template_nome?: string | null
+        }
+        Relationships: []
+      }
       meta_envio_pool_config: {
         Row: {
           antirrepeticao_dias: number
@@ -14064,6 +14088,10 @@ export type Database = {
       is_owner_admin: { Args: { _user_id: string }; Returns: boolean }
       is_parceiro_meta: { Args: { _uid: string }; Returns: boolean }
       is_staff_member: { Args: { _uid: string }; Returns: boolean }
+      liberar_envio_diario_telefone: {
+        Args: { p_telefone: string }
+        Returns: undefined
+      }
       liberar_trava_notificacao_admin: { Args: never; Returns: undefined }
       limpar_pix_links_expirados: { Args: never; Returns: number }
       listar_credores_distintos: {
@@ -14773,6 +14801,10 @@ export type Database = {
       release_base_novo_mundo: {
         Args: { p_owner: string; p_token: string }
         Returns: undefined
+      }
+      reservar_envio_diario_telefone: {
+        Args: { p_instancia: string; p_telefone: string; p_template: string }
+        Returns: boolean
       }
       reservar_maps_aquecimento_unico: {
         Args: { p_instancia: string; p_sufixo: string }

@@ -50,7 +50,7 @@ async function enviarUma(db: any, c: { instancia: string; template: string; nome
       method: 'POST',
       headers: { Authorization: `Bearer ${key}`, apikey: key, 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        template_id: c.template, instancia_id: c.instancia, user_id: ADMIN_USER_ID,
+        template_id: c.template, instancia_id: c.instancia, user_id: ADMIN_USER_ID, proativo: false,
         cliente: { nome: dados.nome, telefone, vars: c.nome === TEMPLATE_CONFIRMACAO_NOVO
           ? { '1': primeiroNome(dados.nome), '2': credorComArtigo(dados.credor), '3': cpfFormatado(dados.cpf), '4': condicaoAcordo(dados.parcelas, dados.valorParcela, dados.vencimento) }
           : { '1': primeiroNome(dados.nome), '2': String(dados.parcelas), '3': valorBr(dados.valorParcela), '4': dataBr(dados.vencimento) } },

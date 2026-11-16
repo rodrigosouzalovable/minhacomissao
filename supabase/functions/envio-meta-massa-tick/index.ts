@@ -971,7 +971,7 @@ async function processarItem(job: any, opts: { ignorarProximoEm?: boolean } = {}
   // #131053 (Media upload error) é falha da mídia do template, não da instância:
   // o contato volta pra fila mas a instância NÃO é bloqueada.
   const erroDeMidia = !ok && /#131053|media upload error/i.test(String(erroMsg || ''));
-  const erroDoDestinatario = !ok && /#131026|#131051|message undeliverable|recipient|n[uú]mero inv[aá]lido|n[aã]o possui whatsapp/i.test(String(erroMsg || ''));
+  const erroDoDestinatario = !ok && /#131026|#131051|message undeliverable|recipient|n[uú]mero inv[aá]lido|n[aã]o possui whatsapp|trava di[aá]ria/i.test(String(erroMsg || ''));
 
   if (ok || erroDeMidia || erroDoDestinatario) {
     if (ok && falhasMap[instId]) delete falhasMap[instId];

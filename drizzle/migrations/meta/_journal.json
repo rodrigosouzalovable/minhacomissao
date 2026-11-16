@@ -1751,6 +1751,13 @@
       "when": 1794832152529,
       "tag": "0249_templates_policy_initplan_uid",
       "breakpoints": true
+    },
+    {
+      "idx": 250,
+      "version": "7",
+      "when": 1794840164642,
+      "tag": "0250_migration",
+      "breakpoints": true
     }
   ]
 }

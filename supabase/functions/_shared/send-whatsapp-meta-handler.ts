@@ -518,7 +518,7 @@ export async function handleSendWhatsAppMeta(req: Request): Promise<Response> {
         status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
-    const { template_id, instancia_id, cliente: clienteRaw, user_id: requestedUserId, modo_teste, atendente_nome, ignorar_pausa_qualidade, folder_id, credor, liberacao_total_parceiro, manual_inbox, button_url } = requestBody;
+    const { template_id, instancia_id, cliente: clienteRaw, user_id: requestedUserId, modo_teste, atendente_nome, ignorar_pausa_qualidade, folder_id, credor, liberacao_total_parceiro, manual_inbox, button_url, proativo } = requestBody;
     const cliente = clienteRaw ? normalizeCliente(clienteRaw) : clienteRaw;
     if (cliente && typeof button_url === 'string' && button_url.trim()) {
       (cliente as any).button_url = button_url.trim();
@@ -811,6 +811,20 @@ export async function handleSendWhatsAppMeta(req: Request): Promise<Response> {
     // Cotas de ramp-up removidas: o usuário controla volume via delay e planilha.
     // Bloqueios reais (pool/pausa/qualidade/horário/domingo) permanecem acima.
 
+    // ===== Trava diária: 1 template proativo por telefone (sufixo) por dia BRT =====
+    const aplicaTrava = !isTeste && manual_inbox !== true && proativo !== false;
+    if (aplicaTrava) {
+      const { data: reservado, error: travaErr } = await supabase.rpc('reservar_envio_diario_telefone', {
+        p_telefone: formatTelefone(cliente.telefone), p_instancia: inst.id, p_template: template.nome_template,
+      });
+      if (!travaErr && reservado === false) {
+        return new Response(JSON.stringify({
+          success: false, ja_recebeu_hoje: true, instancia_id,
+          error: 'Telefone já recebeu mensagem hoje (trava diária)',
+        }), { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+      }
+    }
+
     try {
       const { waId, formatUsed } = await sendOne(inst, template, cliente, supabase);
       await supabase.from('meta_whatsapp_instances')
@@ -980,6 +994,9 @@ export async function handleSendWhatsAppMeta(req: Request): Promise<Response> {
       });
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'erro';
+      if (aplicaTrava) {
+        try { await supabase.rpc('liberar_envio_diario_telefone', { p_telefone: formatTelefone(cliente.telefone) }); } catch (_) { /* ignore */ }
+      }
 
       // ===== Rate limit da Meta: NÃO conta como erro fatal, NÃO restringe instância =====
       const rlMatch = msg.match(/^__RATE_LIMIT__:(\d+):(.*)$/s);
