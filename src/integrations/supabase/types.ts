@@ -10941,6 +10941,27 @@ export type Database = {
         }
         Relationships: []
       }
+      ume_score_propensao: {
+        Row: {
+          atualizado_em: string
+          cpf: string
+          faixa: string | null
+          score: number
+        }
+        Insert: {
+          atualizado_em?: string
+          cpf: string
+          faixa?: string | null
+          score: number
+        }
+        Update: {
+          atualizado_em?: string
+          cpf?: string
+          faixa?: string | null
+          score?: number
+        }
+        Relationships: []
+      }
       ume_sessoes_usuario: {
         Row: {
           access_expira_em: string

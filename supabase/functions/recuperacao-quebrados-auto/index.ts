@@ -27,7 +27,9 @@ Deno.serve(async (req) => {
   if (ok !== true) return json({ success: false, error: "Acesso interno obrigatório" }, 403);
 
   const body = await req.json().catch(() => ({}));
-  const dias = Math.min(31, Math.max(1, Number(body?.dias ?? 7)));
+  // Colchão: cobre todas as parcelas vencidas do mês corrente (mínimo o valor pedido).
+  const diaMes = new Date(Date.now() - 3 * 3600_000).getUTCDate();
+  const dias = Math.min(31, Math.max(1, Number(body?.dias ?? 7), diaMes));
   if (new Date(Date.now() - 3 * 3600_000).getUTCDay() === 0) return json({ success: true, pulado: "domingo" });
 
   const hoje = isoBRT(0), inicio = isoBRT(-dias);

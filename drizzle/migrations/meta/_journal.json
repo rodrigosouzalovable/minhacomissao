@@ -1772,6 +1772,13 @@
       "when": 1794857649177,
       "tag": "0252_migration",
       "breakpoints": true
+    },
+    {
+      "idx": 253,
+      "version": "7",
+      "when": 1794861461055,
+      "tag": "0253_ume_score_propensao_prioridade",
+      "breakpoints": true
     }
   ]
 }
