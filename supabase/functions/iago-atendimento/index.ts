@@ -123,11 +123,6 @@ Deno.serve(async (req) => {
     modoAquecimento = folderId === FOLDER_AQUECIMENTO_INBOX || modoVendas;
     // PADRÃO e caixas personalizadas onde o IAGO foi marcado como atendente
     // funcionam igual: rodízio, respostas e transferência para humanos da mesma caixa.
-    if (!modoAquecimento) {
-      const atende = await iagoAtendeCaixa(supabase, iago.id, folderId);
-      if (!atende) return json({ success: false, skipped: 'IAGO não atende esta caixa' });
-      modoCaixaPadrao = true;
-    }
 
     // ===== Credor da conversa: cabeçalho da conversa > credor único ativo da caixa =====
     const credorResolvido = await resolverCredorConversa(
@@ -147,6 +142,7 @@ Deno.serve(async (req) => {
           const res = await resolverTelefone(supabase, (contato as any).telefone);
           cpfBol = res?.cpf && res.candidatos.length <= 1 ? res.cpf : '';
         }
+        if (!cpfBol) console.warn('[IAGO] boleto imediato sem CPF único', { contato_id });
         if (cpfBol) {
           const idSftp = await borrowerIdSftp(supabase, cpfBol);
           const consulta = idSftp ?? await consultarUme(supabase, cpfBol, { perfil: 'essencial', aguardarCache: false });
@@ -183,6 +179,13 @@ Deno.serve(async (req) => {
         console.error('[IAGO] falha no boleto imediato', String((e as Error)?.message || e));
       }
       // Falha => segue o fluxo normal (atendente humano continua responsável)
+    }
+
+    // Conversa livre do IAGO só nas caixas em que ele é membro (o boleto acima vale sempre).
+    if (!modoAquecimento) {
+      const atende = await iagoAtendeCaixa(supabase, iago.id, folderId);
+      if (!atende) return json({ success: false, skipped: 'IAGO não atende esta caixa' });
+      modoCaixaPadrao = true;
     }
 
     // ===== A conversa é do IAGO? (etiqueta de atendente) =====
