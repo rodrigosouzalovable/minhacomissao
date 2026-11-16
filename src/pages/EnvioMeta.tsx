@@ -838,9 +838,12 @@ export default function EnvioMeta() {
     if (!user?.id) return;
     setLoading(true);
     try {
-    const [i, t, u, bm, vp, modelos] = await Promise.all([
-      supabase.from("meta_whatsapp_instances").select("*").eq("ativo", true).order("nome"),
-      carregarTodosMetaTemplates<Template>("*"),
+    // Instâncias primeiro e independentes: uma falha nos templates não pode esconder os números.
+    const i = await supabase.from("meta_whatsapp_instances").select("*").eq("ativo", true).order("nome");
+    const idsVisiveis = ((i.data as any[]) ?? []).map((r) => r.id as string);
+    const [t, u, bm, vp, modelos] = await Promise.all([
+      carregarTodosMetaTemplates<Template>("*", isAdmin ? {} : { instanciaIds: idsVisiveis })
+        .catch((e) => { console.error("[EnvioMeta] templates", e); toast.error("Não foi possível atualizar os templates. Tente novamente."); return [] as Template[]; }),
 
 
       (supabase as any).from("user_whatsapp_instances")
@@ -852,7 +855,7 @@ export default function EnvioMeta() {
         .is("arquivada_em", null)
         .order("nome"),
       (supabase as any).from("meta_instance_parceiros").select("instancia_id, user_id"),
-      carregarUtilityMestres(user.id),
+      carregarUtilityMestres(user.id).catch(() => [] as any),
     ]);
 
     if (bm?.data) {
@@ -893,13 +896,14 @@ export default function EnvioMeta() {
     setMestres(modelos);
     if (u.data) setUazInstancias(u.data as any);
     } catch (e) {
-      toast.error("Não foi possível atualizar os templates. Tente novamente.");
+      console.error("[EnvioMeta] carregar", e);
+      toast.error("Não foi possível carregar todos os dados. Tente novamente.");
     } finally { setLoading(false); }
   };
 
   useEffect(() => {
     carregar();
-  }, [user?.id]);
+  }, [user?.id, isAdmin]);
 
   // Carrega caixas de mensagens disponíveis para o usuário atual (RLS restringe)
   useEffect(() => {

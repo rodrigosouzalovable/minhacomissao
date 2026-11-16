@@ -357,15 +357,18 @@ export default function ConfigurarMeta() {
     return datas.length > 0 ? new Date(Math.max(...datas)).toISOString() : null;
   }, [templates]);
 
-  const carregarTodosTemplates = async () => {
+  const carregarTodosTemplates = async (instanciaIds?: string[]) => {
+    if (instanciaIds && instanciaIds.length === 0) return [] as Template[];
     const tamanhoPagina = 1000;
     const todos: Template[] = [];
     for (let inicio = 0; ; inicio += tamanhoPagina) {
-      const { data, error } = await supabase
+      const consulta = supabase
         .from("meta_whatsapp_templates")
         .select("id,instancia_id,nome_template,body_text,categoria,idioma,status,variaveis,sincronizado_em")
         .order("sincronizado_em", { ascending: false })
+        .order("id")
         .range(inicio, inicio + tamanhoPagina - 1);
+      const { data, error } = instanciaIds ? await consulta.in("instancia_id", instanciaIds) : await consulta;
       if (error) throw error;
       const pagina = (data || []) as Template[];
       todos.push(...pagina);
@@ -384,9 +387,15 @@ export default function ConfigurarMeta() {
   const carregar = async () => {
     setLoading(true);
     try {
-    const [i, t, b, vp] = await Promise.all([
-      supabase.from("meta_whatsapp_instances").select("*").is("excluida_em", null).order("criado_em", { ascending: false }),
-      carregarTodosTemplates(),
+    // Instâncias primeiro e independentes: falha nos templates não pode esconder os números.
+    const i = await supabase.from("meta_whatsapp_instances").select("*").is("excluida_em", null).order("criado_em", { ascending: false });
+    const idsVisiveis = ((i.data as any[]) ?? []).map((r) => r.id as string);
+    const [t, b, vp] = await Promise.all([
+      carregarTodosTemplates(isAdmin ? undefined : idsVisiveis).catch((e) => {
+        console.error("Falha ao carregar templates", e);
+        toast.error("Não foi possível carregar os templates. Atualize em instantes.");
+        return [] as Template[];
+      }),
       supabase.from("meta_business_managers").select("id,nome,business_id,ativo,padrao,tier_diario,tier_manual,tier_ilimitado").eq("ativo", true).order("padrao", { ascending: false }).order("nome", { ascending: true }),
       supabase.from("meta_instance_parceiros").select("instancia_id"),
     ]);
