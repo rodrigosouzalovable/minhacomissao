@@ -32,15 +32,18 @@ Deno.serve(async (req) => {
   const simular = body?.simular === true;
   // Complemento: completa o lote de hoje até o limite por credor (ex.: lote saiu menor).
   const complemento = body?.complemento === true;
+  // Lote extra sob demanda (admin): nova campanha de um credor no mesmo dia, respeitando fadiga e trava diária.
+  const extraCredor = body?.extra === true && (body?.credor === 'ume' || body?.credor === 'odres_cred') ? body.credor as 'ume' | 'odres_cred' : null;
+  const extraLimite = Math.min(5000, Math.max(1, Number(body?.limite) || 0));
 
   const brt = agoraBRT();
   const hoje = brt.toISOString().slice(0, 10);
   const prefixo = `${NOME} ${hoje}`;
-  const sufixo = complemento ? ' complemento' : '';
+  const sufixo = extraCredor ? ` extra ${new Date().toISOString().slice(11, 16)}` : complemento ? ' complemento' : '';
   if (!simular) {
     if (hoje < INICIO) return json({ success: true, pulado: `começa em ${INICIO}` });
     if (brt.getUTCDay() === 0) return json({ success: true, pulado: 'domingo' });
-    if (!complemento) {
+    if (!complemento && !extraCredor) {
       const { data: ja } = await db.from('envio_meta_job').select('id').eq('user_id', DONO)
         .in('nome_campanha', [prefixo, `${prefixo} UME`, `${prefixo} Odres`]).limit(1);
       if (ja?.length) return json({ success: true, pulado: 'campanha de hoje já criada', job_id: ja[0].id });
@@ -64,7 +67,8 @@ Deno.serve(async (req) => {
   // Resultado único em JSON: a consulta por linhas era cortada em 1.000 pela API (500 por credor).
   const { data: cand, error } = await db.rpc('carteira_sftp_candidatos_json', {
     p_dias_ume: DIAS_FADIGA.ume, p_dias_odres: DIAS_FADIGA.odres_cred,
-    p_limite_ume: Math.max(0, LIMITE.ume - jaHoje.ume), p_limite_odres: Math.max(0, LIMITE.odres_cred - jaHoje.odres_cred),
+    p_limite_ume: extraCredor ? (extraCredor === 'ume' ? extraLimite : 0) : Math.max(0, LIMITE.ume - jaHoje.ume),
+    p_limite_odres: extraCredor ? (extraCredor === 'odres_cred' ? extraLimite : 0) : Math.max(0, LIMITE.odres_cred - jaHoje.odres_cred),
   });
   if (error) return json({ success: false, error: error.message }, 500);
   const lista = (Array.isArray(cand) ? cand : []) as Array<{ cpf: string; nome: string; telefone: string; credor: 'ume' | 'odres_cred'; avista: number; atraso: number; novo: boolean; score: number }>;
