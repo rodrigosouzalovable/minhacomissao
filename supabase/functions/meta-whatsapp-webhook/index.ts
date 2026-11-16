@@ -9,6 +9,7 @@ import { atenderRespostaCadastral } from '../_shared/recuperacao-cadastral-respo
 import { ORIGEM_CADASTRAL } from '../_shared/recuperacao-cadastral-rules.ts';
 import { NOVO_MUNDO_ORIGEM } from '../_shared/novo-mundo-contatos-rules.ts';
 import { etiquetarSeAcordoPortalAVista } from '../_shared/etiqueta-portal-avista.ts';
+import { ehTemplateLembrete, ETIQUETA_RODRIGO_ID } from '../_shared/lembrete-etiqueta.ts';
 import { reenviarConfirmacaoAposFalha } from '../_shared/portal-confirmacao-cliente.ts';
 
 const corsHeaders = {
@@ -1093,7 +1094,48 @@ serve(async (req) => {
                 );
               }
 
-              if (!jaTemAtendente) {
+              // ---- Resposta a LEMBRETE de pagamento: sempre RODRIGO RIBEIRO DE SOUZA ----
+              let respostaLembrete = false;
+              try {
+                const { data: ultTpl } = await supabase
+                  .from('meta_whatsapp_mensagens')
+                  .select('template_nome')
+                  .eq('instancia_id', inst.id)
+                  .eq('telefone', outroLado || '')
+                  .eq('direcao', 'saida')
+                  .order('criado_em', { ascending: false })
+                  .limit(1)
+                  .maybeSingle();
+                const tpl = String((ultTpl as any)?.template_nome || '').toLowerCase();
+                respostaLembrete = ehTemplateLembrete(tpl);
+                if (respostaLembrete) {
+                  const outrosAuto = atendenteIds.filter((id: string) => id !== ETIQUETA_RODRIGO_ID);
+                  if (outrosAuto.length > 0) {
+                    await supabase.from('meta_whatsapp_contato_etiquetas')
+                      .delete()
+                      .eq('contato_id', contatoIdFinal)
+                      .eq('origem', 'auto_atendente')
+                      .in('etiqueta_id', outrosAuto);
+                  }
+                  const { data: jaRod } = await supabase.from('meta_whatsapp_contato_etiquetas')
+                    .select('id').eq('contato_id', contatoIdFinal)
+                    .eq('etiqueta_id', ETIQUETA_RODRIGO_ID).limit(1);
+                  if (!(jaRod || []).length) {
+                    await supabase.from('meta_whatsapp_contato_etiquetas').insert({
+                      contato_id: contatoIdFinal,
+                      etiqueta_id: ETIQUETA_RODRIGO_ID,
+                      origem: 'auto_atendente',
+                    });
+                  }
+                  console.log('[MetaWebhook] resposta de lembrete → RODRIGO', { contato_id: contatoIdFinal, tpl });
+                }
+              } catch (e: any) {
+                console.error('[MetaWebhook] erro etiqueta lembrete', e?.message || e);
+              }
+
+              if (respostaLembrete) {
+                // já etiquetada com RODRIGO
+              } else if (!jaTemAtendente) {
                 // ---- Match por acordo (prioritário fora da caixa PADRÃO) ----
                 let atendenteAcordoId: string | null = null;
                 let atendenteAcordoNome: string | null = null;
