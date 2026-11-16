@@ -192,7 +192,7 @@ Deno.serve(async (req) => {
     const tags = await etiquetasAtendente(supabase, contato_id);
     const nomeIago = String(iago.nome || '').trim().toLowerCase();
     const ehDoIago = tags.some((t) => t.replace(/^atendente:\s*/i, '').trim().toLowerCase() === nomeIago);
-    if (!ehDoIago) {
+    if (!ehDoIago && !modoVendas) {
       return json({ success: false, skipped: tags.length ? 'conversa de outro atendente' : 'conversa sem atendente' });
     }
 
