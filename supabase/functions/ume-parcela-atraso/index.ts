@@ -7,7 +7,7 @@ import { z } from 'https://esm.sh/zod@3.23.8';
 import { umeApi, type UmeAmbiente } from '../_shared/ume-api.ts';
 import { traduzirErroUme } from '../_shared/ume-erros.ts';
 import { consultarUme } from '../_shared/ume-desconto.ts';
-import { sessaoUme, MSG_LOGIN_UME } from '../_shared/ume-sessao.ts';
+import { sessaoUme, operadorDoToken, MSG_LOGIN_UME } from '../_shared/ume-sessao.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -39,7 +39,8 @@ Deno.serve(async (req) => {
     const ambiente: UmeAmbiente = Deno.env.get('UME_PRD_LIBERADO') === 'true' ? 'prd' : 'dev';
     const sessao = caller.userId ? await sessaoUme(db, caller.userId, ambiente) : null;
     if (!sessao) return json({ success: false, error: 'login_ume', message: MSG_LOGIN_UME });
-    const alvo = ambiente; // sessão do atendente valida a identidade; API usa a conta da empresa
+    const alvo = { amb: ambiente, token: sessao.token }; // boleto sai no login do atendente
+    const operador = operadorDoToken(sessao.token, sessao.username);
     const { data: cliSftp } = await db.from('ume_carteira_clientes').select('borrower_id, nome, carteira').eq('cpf', cpf).maybeSingle();
     let cli: { borrower_id: string; nome: string | null; carteira: string | null } | null = cliSftp?.borrower_id ? cliSftp as any : null;
     let online = false;
@@ -65,7 +66,7 @@ Deno.serve(async (req) => {
       // Sem acordo nosso: usa a compra original (parcelas em aberto do SFTP) sem renegociar.
       if (online) {
         // Sem parcelas do SFTP: a UME calcula e emite a cobrança atualizada da parcela em atraso.
-        const r = await umeApi.gerarBoletoUnico(alvo, String(cli.borrower_id), escolhido ?? hoje);
+        const r = await umeApi.gerarBoletoUnico(alvo, String(cli.borrower_id), escolhido ?? hoje, operador);
         if (!r.ok) {
           const msg = String((r.data as any)?.message || (r.data as any)?.error || `ume_http_${r.status}`);
           return json({ success: false, message: traduzirErroUme(msg, 'a atualização da parcela') });
@@ -81,7 +82,7 @@ Deno.serve(async (req) => {
       const { data: parc } = await q.order('vencimento').limit(500);
       const lista = parc ?? [];
       if (!lista.length) {
-        const r = await umeApi.gerarBoletoUnico(alvo, String(cli.borrower_id), escolhido ?? hoje);
+        const r = await umeApi.gerarBoletoUnico(alvo, String(cli.borrower_id), escolhido ?? hoje, operador);
         if (!r.ok) {
           const msg = String((r.data as any)?.message || (r.data as any)?.error || `ume_http_${r.status}`);
           return json({ success: false, message: traduzirErroUme(msg, 'a atualização da parcela') });
@@ -96,7 +97,7 @@ Deno.serve(async (req) => {
       const doContrato = lista.filter((x: any) => x.contrato === p.contrato);
       const atrasada = String(p.vencimento) < hoje;
       const venc = escolhido ?? (atrasada ? hoje : String(p.vencimento));
-      const r = await umeApi.gerarBoletos(alvo, [String(p.installment_id)], venc);
+      const r = await umeApi.gerarBoletos(alvo, [String(p.installment_id)], venc, operador);
       if (!r.ok) {
         const msg = String((r.data as any)?.message || (r.data as any)?.error || `ume_http_${r.status}`);
         return json({ success: false, message: traduzirErroUme(msg, 'a atualização da parcela') });
@@ -118,7 +119,7 @@ Deno.serve(async (req) => {
     const parcela: any = abertas[0];
     const atrasada = String(parcela.data_prevista) < hoje;
     const venc = escolhido ?? (atrasada ? hoje : String(parcela.data_prevista));
-    const r = await umeApi.gerarBoletoUnico(alvo, String(cli.borrower_id), venc);
+    const r = await umeApi.gerarBoletoUnico(alvo, String(cli.borrower_id), venc, operador);
     if (!r.ok) {
       const msg = String((r.data as any)?.message || (r.data as any)?.error || `ume_http_${r.status}`);
       return json({ success: false, message: traduzirErroUme(msg, 'a atualização da parcela') });

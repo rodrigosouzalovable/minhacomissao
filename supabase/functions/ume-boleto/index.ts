@@ -1,5 +1,5 @@
 import { requireCaller, callerCanAccessUmeCpf } from '../_shared/auth-guard.ts';
-import { sessaoUme, MSG_LOGIN_UME } from '../_shared/ume-sessao.ts';
+import { sessaoUme, operadorDoToken, MSG_LOGIN_UME } from '../_shared/ume-sessao.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { z } from 'https://esm.sh/zod@3.23.8';
 import { umeApi, type UmeAmbiente } from '../_shared/ume-api.ts';
@@ -60,7 +60,9 @@ Deno.serve(async (req) => {
     if (origem === 'atendente' && !sessao) return json({ success: false, error: 'login_ume', message: MSG_LOGIN_UME });
 
     const t0 = Date.now();
-    const r = await umeApi.gerarBoletoUnico(ambiente, consulta.borrowerId, vencimento);
+    const r = sessao
+      ? await umeApi.gerarBoletoUnico({ amb: ambiente, token: sessao.token }, consulta.borrowerId, vencimento, operadorDoToken(sessao.token, sessao.username))
+      : await umeApi.gerarBoletoUnico(ambiente, consulta.borrowerId, vencimento);
     console.log('[ume-boleto]', { ambiente, ms: Date.now() - t0, status: r.status });
 
     if (!r.ok) {

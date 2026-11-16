@@ -108,15 +108,32 @@ export const umeApi = {
     qs.set('date', data);
     return chamarUme(amb, 'GET', `/contracts/simulate-multiple-installments?${qs}`);
   },
-  gerarBoletos: (amb: UmeAlvo, installmentsIds: Array<string | number>, dueDate: string) =>
-    chamarUme(amb, 'POST', '/invoices/multiple', { installmentsIds: installmentsIds.map(String), dueDate, generatedAt: UME_ASSESSORIA }),
-  gerarBoletoUnico: (amb: UmeAlvo, borrowerId: string, dueDate: string) =>
-    chamarUme(amb, 'POST', '/invoices/chatbot', { borrowerId, dueDate, generatedAt: UME_ASSESSORIA }),
+  gerarBoletos: (amb: UmeAlvo, installmentsIds: Array<string | number>, dueDate: string, operador?: UmeOperador) =>
+    comFallback(amb, (a) => chamarUme(a, 'POST', '/invoices/multiple', { installmentsIds: installmentsIds.map(String), dueDate, ...campoOperador(operador) })),
+  gerarBoletoUnico: (amb: UmeAlvo, borrowerId: string, dueDate: string, operador?: UmeOperador) =>
+    comFallback(amb, (a) => chamarUme(a, 'POST', '/invoices/chatbot', { borrowerId, dueDate, ...campoOperador(operador) })),
   simularRenegociacao: (amb: UmeAlvo, p: UmeRenegociacao) =>
     chamarUme(amb, 'POST', '/renegotiations/simulations', corpoReneg(p)),
   fecharAcordo: (amb: UmeAlvo, p: UmeRenegociacao) =>
-    chamarUme(amb, 'POST', '/renegotiations', corpoReneg(p)),
+    comFallback(amb, (a) => chamarUme(a, 'POST', '/renegotiations', corpoReneg(p))),
 };
+
+export type UmeOperador = { nome: string; operatorId?: string };
+const campoOperador = (o?: UmeOperador) => ({ generatedAt: o?.nome || UME_ASSESSORIA, ...(o?.operatorId ? { operatorId: o.operatorId } : {}) });
+// Tenta com o login do atendente; se a UME recusar esse acesso (401/403), usa a conta da empresa
+// mantendo o nome/código do operador no corpo.
+async function comFallback(alvo: UmeAlvo, f: (a: UmeAlvo) => Promise<UmeResposta>): Promise<UmeResposta> {
+  if (typeof alvo === 'string') return f(alvo);
+  try {
+    const r = await f(alvo);
+    if (r.status !== 401 && r.status !== 403) return r;
+    console.warn('[ume-api] login do atendente recusado', r.status);
+  } catch (e) {
+    if (String((e as Error)?.message) !== 'ume_login_expirado') throw e;
+    console.warn('[ume-api] login do atendente expirado');
+  }
+  return f(alvo.amb);
+}
 
 export interface UmeRenegociacao {
   monetaryDiscount: number;

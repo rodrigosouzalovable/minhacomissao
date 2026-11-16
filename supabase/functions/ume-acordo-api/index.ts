@@ -97,10 +97,12 @@ Deno.serve(async (req) => {
     const ambiente: UmeAmbiente = Deno.env.get('UME_PRD_LIBERADO') === 'true' ? 'prd' : 'dev';
     // Acordo real sai no nome do atendente: exige o login UME dele.
     let operador: { nome: string; operatorId?: string } | undefined;
+    let tokenAtendente: string | null = null;
     if (b.acao === 'efetivar') {
       const sessao = await sessaoUme(db, u.user.id, ambiente);
       if (!sessao) return json({ success: false, error: 'login_ume', message: MSG_LOGIN_UME.replace('enviar', 'efetivar o acordo no seu nome') });
       operador = operadorDoToken(sessao.token, sessao.username);
+      tokenAtendente = sessao.token;
     }
     const ids = parcelas.map((p) => String(p.installment_id));
     const corpo = {
@@ -134,7 +136,7 @@ Deno.serve(async (req) => {
       corpo.monetaryDiscount = round2(totalDebt - b.totalAlvo);
       corpo.interestRate = 0;
     }
-    const r = b.acao === 'simular' ? await umeApi.simularRenegociacao(ambiente, corpo) : await umeApi.fecharAcordo(ambiente, corpo);
+    const r = b.acao === 'simular' ? await umeApi.simularRenegociacao(ambiente, corpo) : await umeApi.fecharAcordo(tokenAtendente ? { amb: ambiente, token: tokenAtendente } : ambiente, corpo);
     console.log('[ume-acordo-api]', { acao: b.acao, ambiente, status: r.status, parcelas: ids.length, operador: operador?.operatorId ?? null });
 
     await db.from('ume_acordo_api_log').insert({
