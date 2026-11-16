@@ -77,20 +77,34 @@ Deno.serve(async (req) => {
     const naDataEscolhida = async (raw: unknown, b: ReturnType<typeof lerBoleto>, pedida?: string) => {
       const desejada = escolhido ?? pedida;
       if (!desejada || b.vencimento === desejada) return b;
-      const ids = idsDaResposta(raw);
+      let ids = idsDaResposta(raw);
+      let tetoValor: number | null = null;
+      if (!ids.length) {
+        // A UME não informou a parcela: usa a parcela em aberto mais antiga do arquivo SFTP,
+        // como o backoffice faz, para emitir exatamente na data escolhida.
+        let q = db.from('ume_carteira_parcelas').select('installment_id, valor, vencimento').eq('cpf', cpf);
+        if (cli!.carteira) q = q.eq('carteira', cli!.carteira);
+        const { data: p0 } = await q.order('vencimento').limit(1).maybeSingle();
+        if (p0?.installment_id) {
+          ids = [String(p0.installment_id)];
+          tetoValor = Number(p0.valor || 0) > 0 ? Number(p0.valor) * 1.5 : null;
+        }
+      }
       console.log('[ume-parcela-atraso] data divergente', { pedida: desejada, devolvida: b.vencimento, invoiceId: b.invoiceId, ids, usuario: sessao.username });
       if (!ids.length) return b;
       const r2 = await umeApi.gerarBoletos(alvo, ids, desejada, operador);
       const b2 = r2.ok ? lerBoleto(r2.data, desejada) : null;
-      if (b2 && (b2.pixCode || b2.invoiceUrl) && b2.vencimento === desejada) return b2;
+      const valorOk = (x: { valor: number | null } | null) => !tetoValor || !x?.valor || x.valor <= tetoValor;
+      console.log('[ume-parcela-atraso] reemissão por parcela', { ok: r2.ok, status: r2.status, devolvida: b2?.vencimento, valor: b2?.valor, tetoValor });
+      if (b2 && (b2.pixCode || b2.invoiceUrl) && b2.vencimento === desejada && valorOk(b2)) return b2;
       // Mesmo dia recusado no login do atendente: tenta pela conta da empresa.
       if (desejada === hoje) {
         const r3 = await umeApi.gerarBoletos(ambiente, ids, desejada);
         const b3 = r3.ok ? lerBoleto(r3.data, desejada) : null;
         console.log('[ume-parcela-atraso] fallback empresa', { ok: r3.ok, devolvida: b3?.vencimento });
-        if (b3 && (b3.pixCode || b3.invoiceUrl) && b3.vencimento === desejada) return { ...b3, contaEmpresa: true };
+        if (b3 && (b3.pixCode || b3.invoiceUrl) && b3.vencimento === desejada && valorOk(b3)) return { ...b3, contaEmpresa: true };
       }
-      return (b2 && (b2.pixCode || b2.invoiceUrl)) ? b2 : b;
+      return (b2 && (b2.pixCode || b2.invoiceUrl) && valorOk(b2)) ? b2 : b;
     };
     const registrar = (b: ReturnType<typeof lerBoleto>) => db.from('ume_boleto_log').insert({ user_id: caller.userId, cpf, borrower_id: String(cli!.borrower_id), invoice_id: b.invoiceId || null, valor: b.valor, vencimento: b.vencimento, invoice_url: b.invoiceUrl || null, origem: 'atendente', ambiente, ume_username: sessao.username });
 
