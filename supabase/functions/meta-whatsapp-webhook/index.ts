@@ -1094,9 +1094,10 @@ serve(async (req) => {
                 );
               }
 
-              // ---- Resposta a LEMBRETE de pagamento: sempre RODRIGO RIBEIRO DE SOUZA ----
+              // ---- Resposta a LEMBRETE de pagamento: RODRIGO RIBEIRO DE SOUZA, só na caixa PADRÃO ----
+              // Caixas criadas por outros (ex.: parceiros) seguem o rodízio da própria equipe.
               let respostaLembrete = false;
-              try {
+              if (_folderIdContato === null) try {
                 const { data: ultTpl } = await supabase
                   .from('meta_whatsapp_mensagens')
                   .select('template_nome')
