@@ -2979,6 +2979,19 @@ export default function InboxMeta() {
                                   </p>
                                 </div>
                               )}
+                              {m.direcao === 'entrada' && String(m.conteudo || '').startsWith('A Meta reteve o texto') && (
+                                <div className="w-full flex flex-col items-center gap-1 mt-1 mb-1 px-2">
+                                  <p className="text-[10.5px] leading-snug text-muted-foreground max-w-[85%] text-center">
+                                    Leia no celular deste número ou peça ao cliente para reenviar pelo celular.
+                                  </p>
+                                  {janelaInfo.aberta && (
+                                    <button type="button" className="text-[11px] px-2 py-0.5 rounded-full border border-border bg-background hover:bg-muted text-foreground"
+                                      onClick={() => setPendingTranscricao('Olá! Sua última mensagem não chegou completa para nós. Poderia reenviá-la pelo WhatsApp do seu celular, por favor?')}>
+                                      Pedir reenvio ao cliente
+                                    </button>
+                                  )}
+                                </div>
+                              )}
                             </div>
                           </div>
                         );
