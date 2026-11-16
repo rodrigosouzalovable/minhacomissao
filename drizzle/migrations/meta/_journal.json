@@ -1758,6 +1758,13 @@
       "when": 1794840164642,
       "tag": "0250_migration",
       "breakpoints": true
+    },
+    {
+      "idx": 251,
+      "version": "7",
+      "when": 1794842428223,
+      "tag": "0251_etiqueta_rodrigo_trava_so_padrao",
+      "breakpoints": true
     }
   ]
 }
