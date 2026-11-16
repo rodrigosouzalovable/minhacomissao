@@ -10998,6 +10998,63 @@ export type Database = {
         }
         Relationships: []
       }
+      usa_b2b_config: {
+        Row: {
+          ativo: boolean
+          id: boolean
+          limite_dia: number
+          updated_at: string
+        }
+        Insert: {
+          ativo?: boolean
+          id?: boolean
+          limite_dia?: number
+          updated_at?: string
+        }
+        Update: {
+          ativo?: boolean
+          id?: boolean
+          limite_dia?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      usa_b2b_leads: {
+        Row: {
+          cidade: string | null
+          created_at: string
+          enviado_em: string | null
+          id: string
+          job_id: string | null
+          nicho: string | null
+          nome: string | null
+          place_id: string | null
+          telefone: string
+        }
+        Insert: {
+          cidade?: string | null
+          created_at?: string
+          enviado_em?: string | null
+          id?: string
+          job_id?: string | null
+          nicho?: string | null
+          nome?: string | null
+          place_id?: string | null
+          telefone: string
+        }
+        Update: {
+          cidade?: string | null
+          created_at?: string
+          enviado_em?: string | null
+          id?: string
+          job_id?: string | null
+          nicho?: string | null
+          nome?: string | null
+          place_id?: string | null
+          telefone?: string
+        }
+        Relationships: []
+      }
       user_permissions: {
         Row: {
           abas_permitidas: string[]

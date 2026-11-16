@@ -1779,6 +1779,13 @@
       "when": 1794861461055,
       "tag": "0253_ume_score_propensao_prioridade",
       "breakpoints": true
+    },
+    {
+      "idx": 254,
+      "version": "7",
+      "when": 1794863405119,
+      "tag": "0254_usa_b2b_leads",
+      "breakpoints": true
     }
   ]
 }
