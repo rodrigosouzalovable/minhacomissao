@@ -188,7 +188,8 @@ Deno.serve(async (req) => {
     }
 
     // Conversa livre do IAGO só nas caixas em que ele é membro (o boleto acima vale sempre).
-    if (!modoAquecimento) {
+    // Caixas de vendas (BLACK FRIDAY / USA B2B) são sempre atendidas pelo IAGO.
+    if (!modoAquecimento && !modoVendas) {
       const atende = await iagoAtendeCaixa(supabase, iago.id, folderId);
       if (!atende) return json({ success: false, skipped: 'IAGO não atende esta caixa' });
       modoCaixaPadrao = true;
@@ -278,11 +279,14 @@ Deno.serve(async (req) => {
       const chave = `${mercadoUsa ? 'usa' : 'bf'}_interesse_${contato_id}`;
       const { count: avisos } = await supabase.from('admin_notificacoes_log')
         .select('id', { count: 'exact', head: true }).like('chave_idempotencia', `${chave}:%`);
-      const parada = decidirParada({
+      let parada = decidirParada({
         texto: String(texto || ''), entradasAnteriores: entradasAnt, respostasIago: saidasIago.length,
         ultimaSaidaMs: saidasIago[0] ? new Date(saidasIago[0].criado_em).getTime() : null,
         agoraMs: Date.now(), interessado: Number(avisos || 0) > 0,
       });
+      // USA B2B: saudações automáticas de WhatsApp Business ("Thank you for contacting...")
+      // são lidas depois pelo dono; o IAGO responde mesmo assim, limitado pelo teto de respostas.
+      if (parada === 'robo' && mercadoUsa) parada = null;
       if (parada === 'intervalo') return json({ success: true, skipped: 'vendas: resposta recente' });
       if (parada) {
         await supabase.from('iago_conversa_estado')
