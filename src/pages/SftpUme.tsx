@@ -109,6 +109,18 @@ export default function SftpUme() {
     setOcupado(null);
   };
 
+  const rodarBaixa = async () => {
+    if (!confirm('Buscar no SFTP os arquivos mais recentes da UME e da Odres e dar baixa nos pagamentos?')) return;
+    setOcupado('auto');
+    const res = await Promise.all(['/carga', '/odres/carga'].map((pasta) =>
+      supabase.functions.invoke('sftp-ume-auto', { body: { pasta } })));
+    setOcupado(null);
+    const falha = res.find((r) => r.error || r.data?.error);
+    if (falha) toast.error(falha.data?.error || 'Não foi possível iniciar a baixa. Tente novamente.');
+    else toast.success('Baixa iniciada. Os arquivos grandes levam alguns minutos; o resultado aparece em "Arquivos importados".');
+    setTimeout(carregarHistorico, 60000);
+  };
+
   const aplicar = async (h: Importado) => {
     if (!confirm(`Marcar como pagas ${h.casadas} parcelas encontradas em "${h.nome_arquivo}"?`)) return;
     setOcupado(h.id);
@@ -137,6 +149,19 @@ export default function SftpUme() {
           <h1 className="text-2xl font-bold">SFTP UME / Odres</h1>
           <p className="text-sm text-muted-foreground">Arquivos enviados pela UME com clientes e baixas de pagamento.</p>
         </div>
+
+        <Card>
+          <CardHeader className="flex flex-row items-center justify-between gap-4 space-y-0">
+            <div>
+              <CardTitle>Baixa de pagamentos</CardTitle>
+              <CardDescription>Busca os arquivos novos da UME e da Odres e baixa as parcelas pagas dos acordos.</CardDescription>
+            </div>
+            <Button onClick={rodarBaixa} disabled={!!ocupado}>
+              {ocupado === 'auto' ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <CheckCircle2 className="mr-2 h-4 w-4" />}
+              Rodar baixa de pagamentos agora
+            </Button>
+          </CardHeader>
+        </Card>
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between gap-4 space-y-0">
