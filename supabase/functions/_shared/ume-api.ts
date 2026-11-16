@@ -125,11 +125,18 @@ export interface UmeRenegociacao {
   firstPaymentDueDate: string;
   numberOfPayments: number;
   interestRate: number;
+  /** Operador real (login UME do atendente); padrão = conta da assessoria. */
+  operador?: { nome: string; operatorId?: string };
 }
 
 // A API real valida "installmentIds" (o manual escreve "installmentsIds").
 // IDs sempre como texto: números grandes podem chegar em notação científica.
 function corpoReneg(p: UmeRenegociacao) {
-  const { installmentsIds, ...resto } = p;
-  return { ...resto, installmentIds: installmentsIds.map(String), generatedAt: UME_ASSESSORIA };
+  const { installmentsIds, operador, ...resto } = p;
+  return {
+    ...resto,
+    installmentIds: installmentsIds.map(String),
+    generatedAt: operador?.nome || UME_ASSESSORIA,
+    ...(operador?.operatorId ? { operatorId: operador.operatorId } : {}),
+  };
 }

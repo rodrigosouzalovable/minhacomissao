@@ -71,3 +71,14 @@ export async function sessaoUme(db: Db, userId: string, amb: UmeAmbiente): Promi
 }
 
 export const MSG_LOGIN_UME = 'Faça login na UME (quadro "Login UME" da calculadora) para enviar.';
+
+/** Nome e ID de operador gravados no token do backoffice (para registrar o acordo no nome do atendente). */
+export function operadorDoToken(token: string, username: string): { nome: string; operatorId?: string } {
+  try {
+    const b = token.split('.')[1].replace(/-/g, '+').replace(/_/g, '/');
+    const j = JSON.parse(new TextDecoder().decode(Uint8Array.from(atob(b + '='.repeat((4 - b.length % 4) % 4)), (c) => c.charCodeAt(0))));
+    const id = j['operator-id'] ?? j.operatorId ?? j.operator_id;
+    const nome = String(j.name || j.preferred_username || username);
+    return { nome, ...(id != null && id !== '' ? { operatorId: String(id) } : {}) };
+  } catch { return { nome: username }; }
+}

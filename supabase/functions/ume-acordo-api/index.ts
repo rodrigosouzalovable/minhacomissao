@@ -6,6 +6,7 @@ import { z } from 'https://esm.sh/zod@3.23.8';
 import { umeApi, type UmeAmbiente } from '../_shared/ume-api.ts';
 import { consultarUme } from '../_shared/ume-desconto.ts';
 import { traduzirErroUme } from '../_shared/ume-erros.ts';
+import { sessaoUme, operadorDoToken, MSG_LOGIN_UME } from '../_shared/ume-sessao.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -94,8 +95,16 @@ Deno.serve(async (req) => {
     if (b.acao === 'efetivar' && b.confirmar !== true) return json({ error: 'confirmação obrigatória' }, 400);
 
     const ambiente: UmeAmbiente = Deno.env.get('UME_PRD_LIBERADO') === 'true' ? 'prd' : 'dev';
+    // Acordo real sai no nome do atendente: exige o login UME dele.
+    let operador: { nome: string; operatorId?: string } | undefined;
+    if (b.acao === 'efetivar') {
+      const sessao = await sessaoUme(db, u.user.id, ambiente);
+      if (!sessao) return json({ success: false, error: 'login_ume', message: MSG_LOGIN_UME.replace('enviar', 'efetivar o acordo no seu nome') });
+      operador = operadorDoToken(sessao.token, sessao.username);
+    }
     const ids = parcelas.map((p) => String(p.installment_id));
     const corpo = {
+      operador,
       borrowerId: String(cli.borrower_id),
       installmentsIds: ids,
       monetaryDiscount: round2(b.desconto),
@@ -106,7 +115,7 @@ Deno.serve(async (req) => {
     // Total combinado com o cliente: a UME atualiza a dívida com encargos de atraso,
     // então lemos o totalDebt atualizado e enviamos a diferença como desconto, sem juros.
     if (b.totalAlvo && b.totalAlvo > 0) {
-      const base = await umeApi.simularRenegociacao(ambiente, { ...corpo, monetaryDiscount: 0, interestRate: 0 });
+      const base = await umeApi.simularRenegociacao(ambiente, { ...corpo, operador: undefined, monetaryDiscount: 0, interestRate: 0 });
       const totalDebt = Number((base.data as Record<string, unknown> | null)?.totalDebt);
       if (!base.ok || !Number.isFinite(totalDebt)) {
         const d = base.data as Record<string, unknown> | null;
@@ -126,7 +135,7 @@ Deno.serve(async (req) => {
       corpo.interestRate = 0;
     }
     const r = b.acao === 'simular' ? await umeApi.simularRenegociacao(ambiente, corpo) : await umeApi.fecharAcordo(ambiente, corpo);
-    console.log('[ume-acordo-api]', { acao: b.acao, ambiente, status: r.status, parcelas: ids.length });
+    console.log('[ume-acordo-api]', { acao: b.acao, ambiente, status: r.status, parcelas: ids.length, operador: operador?.operatorId ?? null });
 
     await db.from('ume_acordo_api_log').insert({
       user_id: u.user.id, cpf: b.cpf, borrower_id: corpo.borrowerId, conversa_id: b.conversaId ?? null,

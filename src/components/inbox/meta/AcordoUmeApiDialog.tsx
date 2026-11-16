@@ -13,6 +13,7 @@ import { useQueryClient } from '@tanstack/react-query';
 import { useUserRole } from '@/hooks/useUserRole';
 import { calcularPercentualComissaoMundoDaModa } from '@/lib/comissao';
 import { somarMeses } from '@/components/inbox/meta/LancarAcordoConversa';
+import { UmeLoginBox, type SessaoUmeAtendente } from '@/components/inbox/meta/UmeLoginBox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 
 const soDigitos = (v: string) => (v || '').replace(/\D/g, '');
@@ -213,10 +214,12 @@ export function AcordoUmeApiDialog({ open, onOpenChange, cpfInicial, conversaId,
     ].filter((l) => l !== null).join('\n');
   };
 
+  const [sessaoUmeAt, setSessaoUmeAt] = useState<SessaoUmeAtendente | null>(null);
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-2xl max-h-[88vh] overflow-y-auto">
         <DialogHeader><DialogTitle>Acordo parcelado UME / Odres (API oficial)</DialogTitle></DialogHeader>
+        <UmeLoginBox open={open} sessao={sessaoUmeAt} onSessao={setSessaoUmeAt} />
 
         <div className="flex gap-2">
           <Input value={formatCpf(soDigitos(cpf))} onChange={(e) => setCpf(soDigitos(e.target.value).slice(0, 11))} className="max-w-[190px]" placeholder="000.000.000-00" />
