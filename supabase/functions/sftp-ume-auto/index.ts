@@ -78,7 +78,12 @@ Deno.serve(async (req) => {
   if (!pasta) return json({ error: 'Pasta inválida' }, 400);
   const continuar = body?.continuar === true;
 
-  if (admin && !continuar) return json({ error: 'Admins só podem enviar arquivo ou continuar' }, 400);
+  // Admin pode iniciar manualmente pela tela; nunca em paralelo a uma execução em andamento.
+  if (!continuar) {
+    const { data: atual } = await db.from('sftp_ume_auto_progresso').select('status, atualizado_em').eq('pasta', pasta).maybeSingle();
+    const recente = atual?.atualizado_em && Date.now() - new Date(atual.atualizado_em).getTime() < 15 * 60_000;
+    if (atual?.status === 'processando' && recente) return json({ ok: true, em_andamento: pasta }, 202);
+  }
   const tarefa = fatia(db, pasta, continuar).then((r) => proxima(r, pasta, token));
   // deno-lint-ignore no-explicit-any
   (globalThis as any).EdgeRuntime?.waitUntil(tarefa);

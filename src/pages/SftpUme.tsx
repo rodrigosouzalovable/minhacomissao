@@ -116,8 +116,14 @@ export default function SftpUme() {
       supabase.functions.invoke('sftp-ume-auto', { body: { pasta } })));
     setOcupado(null);
     const falha = res.find((r) => r.error || r.data?.error);
-    if (falha) toast.error(falha.data?.error || 'Não foi possível iniciar a baixa. Tente novamente.');
-    else toast.success('Baixa iniciada. Os arquivos grandes levam alguns minutos; o resultado aparece em "Arquivos importados".');
+    if (falha) {
+      let msg = falha.data?.error as string | undefined;
+      const ctx = (falha.error as { context?: Response } | null)?.context;
+      if (!msg && ctx?.json) msg = (await ctx.json().catch(() => ({})))?.error;
+      toast.error(msg ? `Não foi possível iniciar a baixa: ${msg}` : 'Não foi possível iniciar a baixa. Tente novamente.');
+    } else if (res.some((r) => r.data?.em_andamento)) {
+      toast.success('A baixa já está em andamento. O resultado aparece em "Arquivos importados" em alguns minutos.');
+    } else toast.success('Baixa iniciada. Os arquivos grandes levam alguns minutos; o resultado aparece em "Arquivos importados".');
     setTimeout(carregarHistorico, 60000);
   };
 
