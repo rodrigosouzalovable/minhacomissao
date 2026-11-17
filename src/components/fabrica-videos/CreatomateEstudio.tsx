@@ -101,8 +101,8 @@ export function CreatomateEstudio() {
         </CardHeader>
         <CardContent className="space-y-3">
           <div>
-            <label className="text-sm font-medium">Links dos vídeos (um por linha, https .mp4)</label>
-            <Textarea rows={4} value={links} onChange={(e) => setLinks(e.target.value)} placeholder="https://.../clipe1.mp4" />
+            <label className="text-sm font-medium">Links dos vídeos (um por linha: TikTok ou .mp4)</label>
+            <Textarea rows={4} value={links} onChange={(e) => setLinks(e.target.value)} placeholder="https://www.tiktok.com/@perfil/video/..." />
           </div>
           <div>
             <label className="text-sm font-medium">Frase de impacto (primeiros 3 segundos)</label>

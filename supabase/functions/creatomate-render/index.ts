@@ -19,6 +19,26 @@ async function testar(k: string) {
 const API = 'https://api.creatomate.com/v2/renders';
 const json = (b: unknown, s = 200) => new Response(JSON.stringify(b), { status: s, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
 const isUrl = (u: unknown) => typeof u === 'string' && /^https:\/\/\S+$/.test(u) && u.length < 2000;
+const isSocial = (u: string) => /^https:\/\/([\w-]+\.)?(tiktok\.com|vm\.tiktok\.com)\//i.test(u);
+
+// Links de página do TikTok viram .mp4 sem marca d'água, copiado para armazenamento próprio (a Creatomate não lê o CDN do TikTok).
+async function resolverLink(u: string): Promise<string> {
+  if (!isSocial(u)) return u;
+  const r = await fetch(`https://www.tikwm.com/api/?hd=1&url=${encodeURIComponent(u)}`);
+  const d = await r.json().catch(() => null);
+  const mp4 = d?.data?.hdplay || d?.data?.play;
+  if (!mp4) throw new Error(`Não consegui extrair o vídeo: ${u}`);
+  const v = await fetch(mp4);
+  if (!v.ok) throw new Error(`Falha ao baixar o vídeo: ${u}`);
+  const buf = await v.arrayBuffer();
+  if (buf.byteLength > 150 * 1024 * 1024) throw new Error('Vídeo grande demais (máx. 150 MB)');
+  const c = db();
+  await c.storage.createBucket('fabrica-videos-clipes', { public: true }).catch(() => {});
+  const path = `${d.data.id || crypto.randomUUID()}.mp4`;
+  const { error } = await c.storage.from('fabrica-videos-clipes').upload(path, new Blob([buf], { type: 'video/mp4' }), { upsert: true, contentType: 'video/mp4' });
+  if (error) throw new Error('Falha ao guardar o vídeo extraído');
+  return c.storage.from('fabrica-videos-clipes').getPublicUrl(path).data.publicUrl;
+}
 
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
@@ -51,8 +71,10 @@ Deno.serve(async (req) => {
     return json({ id: d.id, status: d.status, url: d.url, erro: d.error_message });
   }
 
-  const links: string[] = Array.isArray(body?.links) ? body.links.filter(isUrl).slice(0, 10) : [];
-  if (!links.length) return json({ error: 'Informe ao menos um link https de vídeo (.mp4)' }, 400);
+  const brutos: string[] = Array.isArray(body?.links) ? [...new Set<string>(body.links.filter(isUrl))].slice(0, 10) : [];
+  if (!brutos.length) return json({ error: 'Informe ao menos um link https de vídeo (.mp4 ou TikTok)' }, 400);
+  let links: string[];
+  try { links = await Promise.all(brutos.map(resolverLink)); } catch (e) { return json({ error: (e as Error).message }, 400); }
   const narracao = typeof body.narracao === 'string' ? body.narracao.trim().slice(0, 2000) : '';
   const gancho = typeof body.gancho === 'string' ? body.gancho.trim().slice(0, 120) : '';
   const voz = typeof body.voz === 'string' && body.voz.length < 200 ? body.voz : 'elevenlabs model_id=eleven_multilingual_v2 voice_id=21m00Tcm4TlvDq8ikWAM';
