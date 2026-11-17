@@ -12,6 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { toast } from "sonner";
 import { GuiaAfiliados } from "@/components/fabrica-videos/GuiaAfiliados";
 import { ContasSociais } from "@/components/fabrica-videos/ContasSociais";
+import { CreatomateEstudio } from "@/components/fabrica-videos/CreatomateEstudio";
 import { Clapperboard, Loader2, Sparkles, Trash2, Link2, CalendarClock, Rocket, CheckCircle2, Circle } from "lucide-react";
 
 const MODELOS = [
@@ -133,6 +134,7 @@ export default function FabricaVideos() {
 
         <Tabs defaultValue="roteiros">
           <TabsList className="flex-wrap h-auto">
+            <TabsTrigger value="creatomate">Criar vídeo</TabsTrigger>
             <TabsTrigger value="roteiros">Roteiros</TabsTrigger>
             <TabsTrigger value="afiliados">Afiliados</TabsTrigger>
             <TabsTrigger value="fila">Fila de postagem</TabsTrigger>
@@ -262,6 +264,7 @@ export default function FabricaVideos() {
           </TabsContent>
 
           <TabsContent value="contas"><ContasSociais /></TabsContent>
+          <TabsContent value="creatomate"><CreatomateEstudio /></TabsContent>
 
           <TabsContent value="config" className="space-y-4">
             <Card>
