@@ -10,6 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
+import { GuiaAfiliados } from "@/components/fabrica-videos/GuiaAfiliados";
 import { ContasSociais } from "@/components/fabrica-videos/ContasSociais";
 import { Clapperboard, Loader2, Sparkles, Trash2, Link2, CalendarClock, Rocket, CheckCircle2, Circle } from "lucide-react";
 
@@ -205,6 +206,7 @@ export default function FabricaVideos() {
           </TabsContent>
 
           <TabsContent value="afiliados" className="space-y-4">
+            <GuiaAfiliados />
             <Card>
               <CardHeader><CardTitle className="text-lg">Cadastrar produto de afiliado</CardTitle></CardHeader>
               <CardContent className="grid gap-3 md:grid-cols-3">
@@ -219,7 +221,7 @@ export default function FabricaVideos() {
                   </SelectContent>
                 </Select>
                 <Input placeholder="Link de afiliado (https://...)" value={prod.link} onChange={(e) => setProd({ ...prod, link: e.target.value })} />
-                <Input placeholder="Preço (R$)" value={prod.preco} onChange={(e) => setProd({ ...prod, preco: e.target.value })} />
+                <Input placeholder="Preço (US$)" value={prod.preco} onChange={(e) => setProd({ ...prod, preco: e.target.value })} />
                 <Input placeholder="Comissão (%)" value={prod.comissao} onChange={(e) => setProd({ ...prod, comissao: e.target.value })} />
                 <Button onClick={salvarProduto}>Salvar produto</Button>
               </CardContent>
@@ -230,7 +232,7 @@ export default function FabricaVideos() {
                   <CardContent className="flex items-start justify-between gap-2 pt-4 text-sm">
                     <div className="min-w-0">
                       <div className="font-semibold">{p.nome} <Badge variant="outline" className="ml-1">{p.plataforma}</Badge></div>
-                      <div className="text-muted-foreground">{p.preco ? `R$ ${Number(p.preco).toFixed(2)}` : "—"} · comissão {p.comissao_pct ?? "—"}%</div>
+                      <div className="text-muted-foreground">{p.preco ? `US$ ${Number(p.preco).toFixed(2)}` : "—"} · comissão {p.comissao_pct ?? "—"}%</div>
                       <a href={p.link} target="_blank" rel="noreferrer" className="flex items-center gap-1 truncate text-primary"><Link2 className="h-3 w-3" />{p.link}</a>
                     </div>
                     <Button size="sm" variant="ghost" onClick={() => excluirProduto(p.id)}><Trash2 className="h-4 w-4" /></Button>
