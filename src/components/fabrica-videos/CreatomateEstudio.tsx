@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { Loader2, Wand2, Download } from "lucide-react";
+import { Loader2, Wand2, Download, KeyRound } from "lucide-react";
 
 type Render = { id: string; status: string; url?: string; erro?: string; criado: string };
 const LS = "creatomate_renders";
@@ -18,6 +18,26 @@ export function CreatomateEstudio() {
   const [voz, setVoz] = useState("");
   const [templateId, setTemplateId] = useState("");
   const [enviando, setEnviando] = useState(false);
+  const [chave, setChave] = useState("");
+  const [salvandoChave, setSalvandoChave] = useState(false);
+  const [statusChave, setStatusChave] = useState<null | { configurada: boolean; valida: boolean }>(null);
+
+  const verificarChave = async () => {
+    const { data } = await supabase.functions.invoke("creatomate-render", { body: { acao: "status_chave" } });
+    if (data) setStatusChave(data);
+  };
+  useEffect(() => { verificarChave(); }, []);
+
+  const salvarChave = async () => {
+    if (!chave.trim()) return toast.error("Cole a chave da Creatomate");
+    setSalvandoChave(true);
+    const { data, error } = await supabase.functions.invoke("creatomate-render", { body: { acao: "salvar_chave", chave: chave.trim() } });
+    setSalvandoChave(false);
+    if (error || data?.error) return toast.error(data?.error || "Não foi possível salvar a chave");
+    setChave("");
+    toast.success("Chave salva e validada");
+    verificarChave();
+  };
   const [renders, setRenders] = useState<Render[]>(() => { try { return JSON.parse(localStorage.getItem(LS) || "[]"); } catch { return []; } });
 
   useEffect(() => { localStorage.setItem(LS, JSON.stringify(renders.slice(0, 30))); }, [renders]);
@@ -51,6 +71,29 @@ export function CreatomateEstudio() {
 
   return (
     <div className="space-y-4">
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2"><KeyRound className="h-5 w-5" /> Chave da Creatomate</CardTitle>
+          <CardDescription>
+            Cole aqui a chave (Creatomate → Project Settings → API Key). Ela fica guardada com segurança e não aparece mais na tela.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <div className="text-sm">
+            Situação:{" "}
+            {statusChave === null ? <Badge variant="secondary">verificando…</Badge>
+              : statusChave.valida ? <Badge>Conectada</Badge>
+              : statusChave.configurada ? <Badge variant="destructive">Chave recusada</Badge>
+              : <Badge variant="outline">Não configurada</Badge>}
+          </div>
+          <div className="flex gap-2">
+            <Input type="password" autoComplete="off" value={chave} onChange={(e) => setChave(e.target.value)} placeholder="Cole a chave aqui" />
+            <Button onClick={salvarChave} disabled={salvandoChave}>
+              {salvandoChave && <Loader2 className="h-4 w-4 animate-spin mr-2" />} Salvar chave
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2"><Wand2 className="h-5 w-5" /> Criar vídeo com Creatomate</CardTitle>

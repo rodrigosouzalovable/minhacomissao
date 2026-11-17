@@ -1,5 +1,20 @@
 import { corsHeaders } from 'npm:@supabase/supabase-js@2/cors';
 import { requireCaller } from '../_shared/auth-guard.ts';
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+
+// Chave salva pela tela fica em bucket privado (só service role lê); nunca volta ao navegador.
+const BUCKET = 'config-privada';
+const ARQ = 'creatomate/api-key.txt';
+const db = () => createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!, { auth: { persistSession: false } });
+async function lerChave(): Promise<string | null> {
+  const { data } = await db().storage.from(BUCKET).download(ARQ);
+  const t = data ? (await data.text()).trim() : '';
+  return t || Deno.env.get('CREATOMATE_API_KEY') || null;
+}
+async function testar(k: string) {
+  const r = await fetch('https://api.creatomate.com/v2/templates', { headers: { Authorization: `Bearer ${k}` } });
+  return r.ok;
+}
 
 const API = 'https://api.creatomate.com/v2/renders';
 const json = (b: unknown, s = 200) => new Response(JSON.stringify(b), { status: s, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
@@ -9,12 +24,24 @@ Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: corsHeaders });
   const caller = await requireCaller(req, { user: 'admin', corsHeaders });
   if (caller instanceof Response) return caller;
-  const key = Deno.env.get('CREATOMATE_API_KEY');
-  if (!key) return json({ error: 'Chave da Creatomate não configurada' }, 400);
-  const auth = { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' };
-
   let body: any;
   try { body = await req.json(); } catch { return json({ error: 'JSON inválido' }, 400); }
+
+  if (body?.acao === 'salvar_chave') {
+    const k = typeof body.chave === 'string' ? body.chave.trim() : '';
+    if (!/^[A-Za-z0-9_-]{20,200}$/.test(k)) return json({ error: 'Chave em formato inválido' }, 400);
+    if (!(await testar(k))) return json({ error: 'A Creatomate recusou essa chave. Copie novamente em Project Settings.' }, 400);
+    const c = db();
+    await c.storage.createBucket(BUCKET, { public: false }).catch(() => {});
+    const { error } = await c.storage.from(BUCKET).upload(ARQ, new Blob([k], { type: 'text/plain' }), { upsert: true });
+    if (error) return json({ error: 'Falha ao salvar a chave' }, 500);
+    return json({ ok: true });
+  }
+
+  const key = await lerChave();
+  if (body?.acao === 'status_chave') return json({ configurada: !!key, valida: key ? await testar(key) : false });
+  if (!key) return json({ error: 'Chave da Creatomate não configurada' }, 400);
+  const auth = { Authorization: `Bearer ${key}`, 'Content-Type': 'application/json' };
 
   if (body?.acao === 'status') {
     if (typeof body.id !== 'string' || !/^[\w-]{8,64}$/.test(body.id)) return json({ error: 'id inválido' }, 400);
