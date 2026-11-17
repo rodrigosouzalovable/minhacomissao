@@ -136,7 +136,13 @@ Deno.serve(async (req) => {
       corpo.monetaryDiscount = round2(totalDebt - b.totalAlvo);
       corpo.interestRate = 0;
     }
-    const r = b.acao === 'simular' ? await umeApi.simularRenegociacao(ambiente, corpo) : await umeApi.fecharAcordo(tokenAtendente ? { amb: ambiente, token: tokenAtendente } : ambiente, corpo);
+    const r = b.acao === 'simular'
+      ? await umeApi.simularRenegociacao(ambiente, corpo)
+      : await umeApi.fecharAcordoComoAtendente(ambiente, tokenAtendente!, corpo);
+    if (b.acao === 'efetivar' && (r.status === 401 || r.status === 403)) {
+      return json({ success: false, error: 'login_ume', message: 'A UME recusou seu login. Entre de novo no quadro "Login UME" para o acordo sair no seu nome.' });
+    }
+    if (r.data && typeof r.data === 'object') (r.data as Record<string, unknown>).lancadoPor = { umeLogin: operador?.nome, operatorId: operador?.operatorId ?? null };
     console.log('[ume-acordo-api]', { acao: b.acao, ambiente, status: r.status, parcelas: ids.length, operador: operador?.operatorId ?? null });
 
     await db.from('ume_acordo_api_log').insert({

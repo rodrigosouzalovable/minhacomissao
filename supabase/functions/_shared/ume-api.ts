@@ -116,7 +116,39 @@ export const umeApi = {
     chamarUme(amb, 'POST', '/renegotiations/simulations', corpoReneg(p)),
   fecharAcordo: (amb: UmeAlvo, p: UmeRenegociacao) =>
     comFallback(amb, (a) => chamarUme(a, 'POST', '/renegotiations', corpoReneg(p))),
+  /** Acordo pelo mesmo caminho do backoffice, com o login do atendente: a UME grava ele como operador. Sem fallback para a conta da empresa. */
+  fecharAcordoComoAtendente: (amb: UmeAmbiente, token: string, p: UmeRenegociacao) =>
+    chamarBackoffice(amb, token, 'POST', '/collections/renegotiations', {
+      customerId: p.borrowerId,
+      installmentIds: p.installmentsIds.map(String),
+      firstPaymentDueDate: p.firstPaymentDueDate,
+      numberOfPayments: p.numberOfPayments,
+      interestRate: p.interestRate,
+      monetaryDiscount: p.monetaryDiscount,
+    }),
 };
+
+// API do backoffice interno (a mesma do site backoffice.ume.com.br/v2), autenticada pelo login do atendente.
+const BFF_BACKOFFICE: Record<UmeAmbiente, string> = {
+  dev: 'https://dev-api.ume.com.br/operations/bff-internal-backoffice',
+  prd: 'https://api.ume.com.br/operations/bff-internal-backoffice',
+};
+export async function chamarBackoffice(amb: UmeAmbiente, token: string, metodo: 'GET' | 'POST', caminho: string, body?: unknown): Promise<UmeResposta> {
+  await aguardarVez();
+  const resp = await fetch(`${BFF_BACKOFFICE[amb]}${caminho}`, {
+    method: metodo,
+    headers: { Authorization: `Bearer ${token}`, 'User-Agent': UA, ...(body ? { 'Content-Type': 'application/json' } : {}) },
+    body: body ? JSON.stringify(body) : undefined,
+    signal: AbortSignal.timeout(30_000),
+  });
+  const txt = await resp.text();
+  let data: unknown = null;
+  try { data = txt ? JSON.parse(txt) : null; } catch { data = { raw: txt.slice(0, 2000) }; }
+  if (data && typeof data === 'object' && !('message' in data) && 'detail' in data) {
+    (data as Record<string, unknown>).message = (data as Record<string, unknown>).detail;
+  }
+  return { status: resp.status, ok: resp.ok, data };
+}
 
 export type UmeOperador = { nome: string; operatorId?: string };
 const campoOperador = (o?: UmeOperador) => ({ generatedAt: o?.nome || UME_ASSESSORIA, ...(o?.operatorId ? { operatorId: o.operatorId } : {}) });

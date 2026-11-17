@@ -131,7 +131,7 @@ export function AcordoUmeApiDialog({ open, onOpenChange, cpfInicial, conversaId,
       const r = await chamar({ acao, cpf: soDigitos(cpf), numeroParcelas: n, primeiroVencimento: primeiroVenc, desconto: 0, juros: 0, totalAlvo: round2(vTotal), confirmar: acao === 'efetivar', conversaId: conversaId || null });
       if (acao === 'simular') { setSimulacao(r.resultado ?? {}); toast.success('Simulação da UME recebida — confira antes de efetivar'); }
       else {
-        setEfetivado(r.resultado ?? {}); toast.success('Acordo efetivado na UME');
+        setEfetivado(r.resultado ?? {}); toast.success(r.resultado?.lancadoPor?.umeLogin ? `Acordo efetivado na UME por ${r.resultado.lancadoPor.umeLogin}` : 'Acordo efetivado na UME');
         onEfetivado?.({ cpf: soDigitos(cpf), nome: dados?.cliente.nome || nomeContato || '', total: round2(vTotal), parcelas: n, primeiroVencimento: primeiroVenc, observacao: `acordo UME efetivado, ID UME ${dados?.cliente.borrowerId ?? ''}` });
       }
     } catch (e) { setErro(String((e as Error)?.message || e)); }
