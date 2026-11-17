@@ -11325,6 +11325,45 @@ export type Database = {
         }
         Relationships: []
       }
+      video_contas_sociais: {
+        Row: {
+          avatar_url: string | null
+          erro: string | null
+          handle: string
+          nome_exibicao: string | null
+          perfil_url: string | null
+          pode_publicar: boolean
+          rede: string
+          status: string
+          updated_at: string
+          verificado_em: string | null
+        }
+        Insert: {
+          avatar_url?: string | null
+          erro?: string | null
+          handle?: string
+          nome_exibicao?: string | null
+          perfil_url?: string | null
+          pode_publicar?: boolean
+          rede: string
+          status?: string
+          updated_at?: string
+          verificado_em?: string | null
+        }
+        Update: {
+          avatar_url?: string | null
+          erro?: string | null
+          handle?: string
+          nome_exibicao?: string | null
+          perfil_url?: string | null
+          pode_publicar?: boolean
+          rede?: string
+          status?: string
+          updated_at?: string
+          verificado_em?: string | null
+        }
+        Relationships: []
+      }
       video_postagens: {
         Row: {
           agendado_para: string | null

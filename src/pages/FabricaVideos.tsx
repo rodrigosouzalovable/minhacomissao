@@ -10,6 +10,7 @@ import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
+import { ContasSociais } from "@/components/fabrica-videos/ContasSociais";
 import { Clapperboard, Loader2, Sparkles, Trash2, Link2, CalendarClock, Rocket, CheckCircle2, Circle } from "lucide-react";
 
 const MODELOS = [
@@ -46,6 +47,12 @@ export default function FabricaVideos() {
     queryKey: ["video_postagens"], staleTime: 60_000,
     queryFn: async () => (await supabase.from("video_postagens").select("*, video_roteiros(tema)").order("agendado_para", { ascending: true }).limit(200)).data || [],
   });
+
+  const contasSociais = useQuery({
+    queryKey: ["video_contas_sociais"], staleTime: 5 * 60_000,
+    queryFn: async () => (await supabase.from("video_contas_sociais").select("rede,status,pode_publicar")).data || [],
+  });
+  const redesConectadas = (contasSociais.data || []).filter((c: any) => c.status === "conectado" || c.status === "configurado").length;
 
   const custo = (MODELOS.find((m) => m.v === modelo)?.usd || 0) * duracao;
 
@@ -108,7 +115,7 @@ export default function FabricaVideos() {
     { ok: true, t: "Gerador de roteiros virais com IA" },
     { ok: (produtos.data?.length || 0) > 0, t: "Cadastrar produtos de afiliado (Amazon, Shopee, Mercado Livre)" },
     { ok: false, t: "Assinar Higgsfield e salvar a chave da API" },
-    { ok: false, t: "Criar contas TikTok, YouTube e Instagram e conectar" },
+    { ok: redesConectadas >= 3, t: `Conectar TikTok, YouTube e Instagram (${redesConectadas}/3 conectadas)` },
     { ok: false, t: "Ativar geração automática de cenas e postagem diária" },
   ];
 
@@ -128,6 +135,7 @@ export default function FabricaVideos() {
             <TabsTrigger value="roteiros">Roteiros</TabsTrigger>
             <TabsTrigger value="afiliados">Afiliados</TabsTrigger>
             <TabsTrigger value="fila">Fila de postagem</TabsTrigger>
+            <TabsTrigger value="contas">Contas conectadas</TabsTrigger>
             <TabsTrigger value="config">Configuração</TabsTrigger>
           </TabsList>
 
@@ -250,6 +258,8 @@ export default function FabricaVideos() {
             ))}
             <p className="text-xs text-muted-foreground">A publicação automática nas redes será ativada quando as contas forem conectadas.</p>
           </TabsContent>
+
+          <TabsContent value="contas"><ContasSociais /></TabsContent>
 
           <TabsContent value="config" className="space-y-4">
             <Card>
