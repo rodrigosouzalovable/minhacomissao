@@ -6,7 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { toast } from "sonner";
-import { ExternalLink, Loader2, RefreshCw, ShieldCheck, CheckCircle2, Circle } from "lucide-react";
+import { ExternalLink, Loader2, RefreshCw, ShieldCheck, CheckCircle2, Circle, Link2, Unlink } from "lucide-react";
 
 type Conta = {
   rede: string; handle: string; perfil_url: string | null; status: string; nome_exibicao: string | null;
@@ -50,6 +50,27 @@ export function ContasSociais() {
       return ((data || []) as Conta[]).sort((a, b) => ordem.indexOf(a.rede) - ordem.indexOf(b.rede));
     },
   });
+
+  async function desconectar(rede: string) {
+    if (!confirm("Desconectar esta conta da Fábrica de Vídeos?")) return;
+    const { error } = await supabase.from("video_contas_sociais").update({
+      status: "desconectado", nome_exibicao: null, avatar_url: null, pode_publicar: false, erro: null, updated_at: new Date().toISOString(),
+    }).eq("rede", rede);
+    if (error) return toast.error("Falha ao desconectar");
+    toast.success("Conta desconectada");
+    qc.invalidateQueries({ queryKey: ["video_contas_sociais"] });
+  }
+
+  function conectar(rede: string) {
+    const nome = INFO[rede]?.nome || rede;
+    const url: Record<string, string> = {
+      tiktok: "https://www.tiktok.com/logout",
+      youtube: "https://accounts.google.com/",
+      instagram: "https://www.instagram.com/accounts/login/",
+    };
+    window.open(url[rede], "_blank", "noopener");
+    toast.info(`Entre com @topviralfindsusa no ${nome} na aba aberta e depois peça no chat: "conectar ${nome}". A autorização oficial abre em seguida.`, { duration: 12000 });
+  }
 
   async function verificar() {
     setVerificando(true);
@@ -115,7 +136,17 @@ export function ContasSociais() {
                   </>
                 )}
                 {c.erro && <p className="rounded-md border border-destructive/40 bg-destructive/10 p-2 text-xs text-destructive">{c.erro}</p>}
-                <div className="mt-auto flex flex-wrap items-center justify-between gap-2 pt-2 text-xs text-muted-foreground">
+                <div className="mt-auto flex flex-wrap gap-2 pt-2">
+                  <Button size="sm" onClick={() => conectar(c.rede)}>
+                    <Link2 className="mr-1 h-4 w-4" />{ligado || c.status === "erro" ? "Trocar conta" : "Conectar"}
+                  </Button>
+                  {(ligado || c.status === "erro") && (
+                    <Button size="sm" variant="outline" onClick={() => desconectar(c.rede)}>
+                      <Unlink className="mr-1 h-4 w-4" />Desconectar
+                    </Button>
+                  )}
+                </div>
+                <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
                   <span>{c.verificado_em ? `Verificado em ${new Date(c.verificado_em).toLocaleString("pt-BR")}` : "Nunca verificado"}</span>
                   {c.perfil_url && (
                     <a href={c.perfil_url} target="_blank" rel="noreferrer" className="flex items-center gap-1 text-primary">
