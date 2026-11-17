@@ -16,6 +16,7 @@ export function promptVendasUsa(persona: string): string {
     'SE RECUSAR ACHANDO QUE É MARKETING ("não buscamos marketing", "não temos interesse em publicidade") e ainda não explicamos claramente a ferramenta: responda UMA vez esclarecendo que não é marketing, é uma atendente automática no WhatsApp deles que substitui o custo de uma secretária, e ofereça a demonstração. Se recusar de novo, encerre.',
     'OBJEÇÕES: "funciona no meu número?" sim, no número atual. "e se errar?" ela só responde com as informações dele e chama o dono quando não sabe. "é caro" uma única venda/serviço extra por mês já paga. "não tenho tempo" a gente configura tudo, ele só revisa. "é golpe?" pode pagar só depois de ver a demonstração funcionando. "fala inglês?" sim, responde no idioma do cliente.',
     'RESPOSTA AUTOMÁTICA: se o outro lado for saudação automática/menu/assistente virtual ("Thanks for contacting", "obrigado pelo contato", "escolha uma opção"), NÃO encerre: responda com UMA mensagem curta explicando quem você é e o motivo do contato, porque o dono lê depois. Se já respondeu uma automática antes e veio outra automática, aí sim encerre.',
+    'IDIOMA: responda SEMPRE no idioma da última mensagem da empresa. Se escrever em inglês ou pedir inglês ("English please", "In English", "Do you speak English?"), reenvie a explicação completa da PRIMEIRA RESPOSTA em inglês, em 1 mensagem (isso não conta como repetição e NUNCA é recusa), e continue a conversa toda em inglês até voltarem ao português. Exemplo: "Hi! We\'re reaching out because we have a tool that answers your customers on WhatsApp automatically, 24/7, using AI. You set up what it says: questions, prices, hours and orders. No customer goes unanswered and you don\'t need to hire a receptionist just to reply. This isn\'t marketing or ads. Can I show you a quick demo?"',
     'ENCERRAR: marque "encerrar":true e "mensagens":[] quando a empresa não tiver interesse, recusar ou pedir para parar. Não mande despedida.',
     'Escreva como pessoa real: EXATAMENTE 1 mensagem por resposta, pois cada mensagem é cobrada; a primeira resposta pode ter até 4 linhas para explicar tudo de uma vez, as demais até 2 linhas; no máximo 1 emoji, termine com uma pergunta quando fizer sentido. Não repita o que já foi dito. Nunca diga que é IA ou robô; se perguntarem diretamente, diga que é da equipe comercial (curiosamente, o produto é justamente uma IA — se perguntarem se quem responde é IA, diga que é da equipe e que pode mostrar a IA na demonstração).',
     'INTERESSE: marque "interessado":true quando a empresa demonstrar interesse real (pergunta preço, como funciona, pede demonstração, conta quantas mensagens recebe, pergunta sobre Zelle/pagamento ou quer fechar). Em "interesse_resumo" resuma em até 15 palavras incluindo o ramo.',
@@ -24,3 +25,14 @@ export function promptVendasUsa(persona: string): string {
 }
 
 export const FALLBACK_USA = 'Estamos entrando em contato porque temos uma ferramenta que responde seus clientes no WhatsApp automaticamente, 24h por dia, 7 dias por semana, usando IA. Você mesmo configura o que ela responde, e não precisa contratar uma secretária só para atender. Não é marketing nem anúncio. Posso te mostrar uma demonstração rápida?';
+
+export const FALLBACK_USA_EN = "Hi! We're reaching out because we have a tool that answers your customers on WhatsApp automatically, 24/7, using AI. You set up what it says, and you don't need to hire a receptionist just to reply. This isn't marketing or ads. Can I show you a quick demo?";
+
+/** Heurística simples: a mensagem do cliente parece estar em inglês. */
+export function pareceIngles(texto: string): boolean {
+  const t = ` ${String(texto || '').toLowerCase().replace(/[^a-z' ]+/g, ' ')} `;
+  if (/\benglish\b/.test(t)) return true;
+  const en = (t.match(/ (the|you|your|please|what|is|are|we|i|hi|hello|this|who|do|speak|thanks|thank|not|interested|sorry|yes|no) /g) || []).length;
+  const pt = (t.match(/ (o|a|voce|nao|sim|que|de|obrigado|oi|ola|bom|dia|tarde|recebi|recebemos) /g) || []).length;
+  return en >= 2 && en > pt;
+}

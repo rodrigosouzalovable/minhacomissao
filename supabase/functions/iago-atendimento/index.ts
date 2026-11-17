@@ -1,5 +1,5 @@
 import { decidirParada } from '../_shared/vendas-encerramento.ts';
-import { FOLDER_USA_B2B_INBOX, promptVendasUsa, FALLBACK_USA } from '../_shared/vendas-usa.ts';
+import { FOLDER_USA_B2B_INBOX, promptVendasUsa, FALLBACK_USA, FALLBACK_USA_EN, pareceIngles } from '../_shared/vendas-usa.ts';
 import { notificarAdmin } from '../_shared/notificar-admin.ts';
 // IAGO — atendente da caixa PADRÃO por rodízio e de toda entrada UAZAPI da AQUECIMENTO.
 // Na PADRÃO pode escalar; na AQUECIMENTO responde curto, sem humano e sem follow-up.
@@ -1531,7 +1531,7 @@ async function gerarResposta(args: {
     } catch (e: any) {
       console.error('[IAGO] falha no modo vendas', e?.message || e);
     }
-    return { mensagens: [mercadoUsa ? FALLBACK_USA : 'Era sobre uma ação de vendas de Black Friday e Natal pelo WhatsApp oficial para empresas de Goiânia. Vocês costumam falar com seus clientes pelo WhatsApp?'], escalar: false, motivo: 'fallback vendas' };
+    return { mensagens: [mercadoUsa ? (pareceIngles(texto) ? FALLBACK_USA_EN : FALLBACK_USA) : 'Era sobre uma ação de vendas de Black Friday e Natal pelo WhatsApp oficial para empresas de Goiânia. Vocês costumam falar com seus clientes pelo WhatsApp?'], escalar: false, motivo: 'fallback vendas' };
   }
 
   if (modoAquecimento) {
