@@ -64,7 +64,11 @@ export function CreatomateEstudio() {
       body: { links: lista, gancho, narracao, voz: voz || undefined, template_id: templateId || undefined },
     });
     setEnviando(false);
-    if (error || data?.error) return toast.error(data?.error || "Falha ao criar vídeo. Verifique a chave da Creatomate.");
+    if (error || data?.error) {
+      let msg = data?.error;
+      try { msg = msg || (await (error as any)?.context?.json())?.error; } catch { /* corpo ilegível */ }
+      return toast.error(msg || "Falha ao criar vídeo. Verifique a chave da Creatomate.");
+    }
     setRenders((x) => [{ ...data, criado: new Date().toISOString() }, ...x]);
     toast.success("Vídeo enviado para renderização");
   };

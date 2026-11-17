@@ -21,13 +21,21 @@ const json = (b: unknown, s = 200) => new Response(JSON.stringify(b), { status: 
 const isUrl = (u: unknown) => typeof u === 'string' && /^https:\/\/\S+$/.test(u) && u.length < 2000;
 const isSocial = (u: string) => /^https:\/\/([\w-]+\.)?(tiktok\.com|vm\.tiktok\.com)\//i.test(u);
 
+const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+
 // Links de página do TikTok viram .mp4 sem marca d'água, copiado para armazenamento próprio (a Creatomate não lê o CDN do TikTok).
 async function resolverLink(u: string): Promise<string> {
   if (!isSocial(u)) return u;
-  const r = await fetch(`https://www.tikwm.com/api/?hd=1&url=${encodeURIComponent(u)}`);
-  const d = await r.json().catch(() => null);
+  // O extrator gratuito aceita 1 pedido/segundo: chamadas são sequenciais e repetem ao bater no limite.
+  let d: any = null;
+  for (let t = 0; t < 4; t++) {
+    if (t) await sleep(1300 * t);
+    const r = await fetch(`https://www.tikwm.com/api/?hd=1&url=${encodeURIComponent(u)}`).catch(() => null);
+    d = await r?.json().catch(() => null);
+    if (d?.data?.hdplay || d?.data?.play) break;
+  }
   const mp4 = d?.data?.hdplay || d?.data?.play;
-  if (!mp4) throw new Error(`Não consegui extrair o vídeo: ${u}`);
+  if (!mp4) throw new Error(`Não consegui extrair o vídeo (o vídeo pode ser privado ou removido): ${u}`);
   const v = await fetch(mp4);
   if (!v.ok) throw new Error(`Falha ao baixar o vídeo: ${u}`);
   const buf = await v.arrayBuffer();
@@ -74,7 +82,13 @@ Deno.serve(async (req) => {
   const brutos: string[] = Array.isArray(body?.links) ? [...new Set<string>(body.links.filter(isUrl))].slice(0, 10) : [];
   if (!brutos.length) return json({ error: 'Informe ao menos um link https de vídeo (.mp4 ou TikTok)' }, 400);
   let links: string[];
-  try { links = await Promise.all(brutos.map(resolverLink)); } catch (e) { return json({ error: (e as Error).message }, 400); }
+  try {
+    links = [];
+    for (const [i, u] of brutos.entries()) {
+      if (i && isSocial(u)) await sleep(1100);
+      links.push(await resolverLink(u));
+    }
+  } catch (e) { return json({ error: (e as Error).message }, 400); }
   const narracao = typeof body.narracao === 'string' ? body.narracao.trim().slice(0, 2000) : '';
   const gancho = typeof body.gancho === 'string' ? body.gancho.trim().slice(0, 120) : '';
   const voz = typeof body.voz === 'string' && body.voz.length < 200 ? body.voz : 'elevenlabs model_id=eleven_multilingual_v2 voice_id=21m00Tcm4TlvDq8ikWAM';
