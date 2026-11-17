@@ -1793,6 +1793,20 @@
       "when": 1794923836820,
       "tag": "0255_video_contas_sociais",
       "breakpoints": true
+    },
+    {
+      "idx": 256,
+      "version": "7",
+      "when": 1794937044605,
+      "tag": "0256_migration",
+      "breakpoints": true
+    },
+    {
+      "idx": 257,
+      "version": "7",
+      "when": 1794937077716,
+      "tag": "0257_migration",
+      "breakpoints": true
     }
   ]
 }

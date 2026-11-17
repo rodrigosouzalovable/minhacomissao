@@ -1953,6 +1953,10 @@ export default function InboxMeta() {
                                 className="h-5 w-5 rounded-full border-2 transition-transform"
                                 style={{ backgroundColor: c, borderColor: editEtCor === c ? 'hsl(var(--foreground))' : 'transparent', transform: editEtCor === c ? 'scale(1.15)' : 'scale(1)' }} />
                             ))}
+                            <input type="color" aria-label="Escolher outra cor" title="Escolher qualquer cor"
+                              className="h-5 w-5 cursor-pointer rounded-full border-0 bg-transparent p-0"
+                              value={/^#[0-9a-f]{6}$/i.test(editEtCor) ? editEtCor : '#25D366'}
+                              onChange={(e) => setEditEtCor(e.target.value)} />
                           </div>
                           <div className="flex gap-1">
                             <Button size="sm" className="h-6 flex-1 text-xs" onClick={async () => {

@@ -28,6 +28,7 @@ export function MetaFolderAcessoDialog({ open, onOpenChange, folderId, folderNom
   const [naFila, setNaFila] = useState<Set<string>>(new Set());
   const [rodizio, setRodizio] = useState<RodizioStatus[]>([]);
   const [erroRodizio, setErroRodizio] = useState(false);
+  const [cores, setCores] = useState<Map<string, { etiqueta_id: string; nome: string; cor: string }>>(new Map());
   const [busca, setBusca] = useState('');
   const [loading, setLoading] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -41,7 +42,22 @@ export function MetaFolderAcessoDialog({ open, onOpenChange, folderId, folderNom
     setNaFila(new Set(((data as any[]) ?? []).filter((r) => r.na_fila).map((r) => r.user_id)));
     setRodizio((status.data as RodizioStatus[] | null) ?? []);
     setErroRodizio(!!status.error);
+    if (folderId) {
+      const { data: c } = await (supabase as any).rpc('meta_cores_atendentes_caixa', { _folder: folderId });
+      setCores(new Map(((c as any[]) ?? []).map((r) => [r.user_id, r])));
+    }
   }, [folderId]);
+
+  const salvarCor = async (userId: string, cor: string) => {
+    const et = cores.get(userId);
+    if (!et || !folderId) return;
+    const { error } = await (supabase as any).rpc('meta_etiqueta_caixa_salvar', {
+      _folder: folderId, _etiqueta: et.etiqueta_id, _nome: et.nome, _cor: cor, _ativa: true,
+    });
+    if (error) { toast({ title: 'Erro ao salvar cor', description: error.message, variant: 'destructive' }); return; }
+    setCores((prev) => new Map(prev).set(userId, { ...et, cor }));
+    onChanged?.();
+  };
 
 
   const load = useCallback(async () => {
@@ -104,7 +120,8 @@ export function MetaFolderAcessoDialog({ open, onOpenChange, folderId, folderNom
       });
       if (checked) {
         // Garante etiqueta "Atendente: <nome>" + entrada na fila de distribuição
-        await (supabase as any).rpc('meta_provisionar_atendentes_fila', { _folder: folderId });
+        const { error: provErr } = await (supabase as any).rpc('meta_provisionar_atendentes_fila', { _folder: folderId });
+        if (provErr) toast({ title: 'Não foi possível colocar na fila', description: provErr.message, variant: 'destructive' });
       }
       await loadFila();
       onChanged?.();
@@ -208,6 +225,17 @@ export function MetaFolderAcessoDialog({ open, onOpenChange, folderId, folderNom
                 <Checkbox checked={membros.has(u.user_id)} onCheckedChange={(v) => toggle(u.user_id, !!v)} />
                 <span className="flex-1 truncate">{u.nome}</span>
               </label>
+              {membros.has(u.user_id) && cores.has(u.user_id) && (
+                <input
+                  type="color"
+                  aria-label={`Cor da etiqueta de ${u.nome}`}
+                  title="Cor da etiqueta deste atendente nesta caixa"
+                  className="h-5 w-5 shrink-0 cursor-pointer rounded-full border-0 bg-transparent p-0"
+                  value={cores.get(u.user_id)!.cor || '#25D366'}
+                  onChange={(e) => setCores((prev) => new Map(prev).set(u.user_id, { ...prev.get(u.user_id)!, cor: e.target.value }))}
+                  onBlur={(e) => salvarCor(u.user_id, e.target.value)}
+                />
+              )}
               {/^\s*iago\b/i.test(u.nome) && (
                 <span className="text-[10px] font-medium px-1.5 py-0.5 rounded bg-primary/15 text-primary shrink-0">
                   IA

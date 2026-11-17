@@ -14390,6 +14390,15 @@ export type Database = {
           valor_brl: number
         }[]
       }
+      meta_cores_atendentes_caixa: {
+        Args: { _folder: string }
+        Returns: {
+          cor: string
+          etiqueta_id: string
+          nome: string
+          user_id: string
+        }[]
+      }
       meta_entradas_por_sufixos: {
         Args: { p_instancias: string[]; p_sufixos: string[] }
         Returns: {
