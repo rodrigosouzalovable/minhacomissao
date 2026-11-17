@@ -8,7 +8,7 @@ const GATEWAY_URL = 'https://connector-gateway.lovable.dev';
 
 type Resultado = { rede: string; status: string; nome_exibicao?: string | null; avatar_url?: string | null; pode_publicar?: boolean; erro?: string | null };
 
-async function verificarTikTok(): Promise<Resultado> {
+async function verificarTikTok(handleEsperado: string): Promise<Resultado> {
   const lovableKey = Deno.env.get('LOVABLE_API_KEY');
   const tiktokKey = Deno.env.get('TIKTOK_API_KEY');
   if (!lovableKey || !tiktokKey) return { rede: 'tiktok', status: 'desconectado', erro: null };
@@ -20,6 +20,13 @@ async function verificarTikTok(): Promise<Resultado> {
   try { d = JSON.parse(txt); } catch { /* ignore */ }
   if (d?.error?.code && d.error.code !== 'ok') return { rede: 'tiktok', status: 'erro', erro: `${d.error.code}: ${d.error.message || ''}`.slice(0, 300) };
   const u = d?.data?.user || {};
+  const username = String(u.username || '').toLowerCase();
+  if (handleEsperado && username && username !== handleEsperado.toLowerCase()) {
+    return {
+      rede: 'tiktok', status: 'erro', nome_exibicao: `@${u.username}`, avatar_url: u.avatar_url || null, pode_publicar: false,
+      erro: `Conta errada conectada: @${u.username}. Reconecte entrando com @${handleEsperado}.`,
+    };
+  }
   // Publishing needs the Content Posting scope; creator_info is a harmless read that only succeeds with it.
   const c = await fetch(`${GATEWAY_URL}/tiktok/post/publish/creator_info/query/`, {
     method: 'POST', headers: { ...headers, 'Content-Type': 'application/json; charset=UTF-8' }, body: '{}',
@@ -44,13 +51,15 @@ Deno.serve(async (req) => {
   if (caller instanceof Response) return caller;
   const json = (b: unknown, s = 200) => new Response(JSON.stringify(b), { status: s, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
   try {
+    const sb = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!, { auth: { persistSession: false } });
+    const { data: contas } = await sb.from('video_contas_sociais').select('rede, handle');
+    const handleTikTok = String((contas || []).find((c: any) => c.rede === 'tiktok')?.handle || '');
     const resultados: Resultado[] = [];
-    try { resultados.push(await verificarTikTok()); }
+    try { resultados.push(await verificarTikTok(handleTikTok)); }
     catch (e) { resultados.push({ rede: 'tiktok', status: 'erro', erro: String((e as Error).message).slice(0, 300) }); }
     resultados.push(aguardando('youtube', ['YOUTUBE_API_KEY']));
     resultados.push(aguardando('instagram', ['INSTAGRAM_API_KEY']));
 
-    const sb = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!, { auth: { persistSession: false } });
     const agora = new Date().toISOString();
     for (const r of resultados) {
       await sb.from('video_contas_sociais').update({
