@@ -32,7 +32,9 @@ Deno.serve(async (req) => {
   const body = await req.json().catch(() => ({}));
   const { data: cfg } = await db.from('usa_b2b_config').select('*').eq('id', true).maybeSingle();
   if (!cfg?.ativo && body?.forcar !== true) return json({ success: true, pulado: 'rotina USA pausada' });
-  const limite = Math.min(1000, Math.max(1, Number(body?.limite) || cfg?.limite_dia || 300));
+  // Meta: ~300 WhatsApp reais/dia. ~70% dos números do Maps são fixos (sem WhatsApp e sem cobrança), então envia 3x.
+  const metaWhats = Math.min(1000, Math.max(1, Number(body?.limite) || cfg?.limite_dia || 300));
+  const limite = Math.min(1500, metaWhats * 3);
 
   // Quando roda: agora (cron das 10h BRT) ou agendado para a próxima 10:00 BRT (preparo na véspera).
   const agora = new Date();
@@ -68,7 +70,7 @@ Deno.serve(async (req) => {
     outer: for (const q of combos) {
       let token: string | undefined;
       for (let pg = 0; pg < 3; pg++) {
-        if (faltam <= 0 || requisicoes >= 120 || !chaves.length) break outer;
+        if (faltam <= 0 || requisicoes >= 250 || !chaves.length) break outer;
         const r = await fetch('https://places.googleapis.com/v1/places:searchText', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'X-Goog-Api-Key': chaves[0].api_key,
