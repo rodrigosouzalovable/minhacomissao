@@ -1,5 +1,5 @@
 import { cachedFetch } from "@/lib/rpcCache";
-import { RefreshCw } from 'lucide-react';
+import { RefreshCw, Languages } from 'lucide-react';
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { AppLayout } from '@/components/layout/AppLayout';
@@ -258,6 +258,9 @@ export default function InboxMeta() {
   const [filtroJanela24h, setFiltroJanela24h] = useState(false);
   // Caixas de mensagens (folders) — null representa a caixa padrão (folder_id IS NULL)
   const [folders, setFolders] = useState<MetaInboxFolder[]>([]);
+  const [traducaoVisivel, setTraducaoVisivel] = useState(false);
+  const [traduzindoConversa, setTraduzindoConversa] = useState(false);
+  const [traducoesMsg, setTraducoesMsg] = useState<Record<string, string>>({});
   const [currentFolderId, setCurrentFolderId] = useState<string | null>(null);
   const [foldersDialogOpen, setFoldersDialogOpen] = useState(false);
   const [acessoFolder, setAcessoFolder] = useState<{ id: string | null; nome: string } | null>(null);
@@ -346,6 +349,36 @@ export default function InboxMeta() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const composerRef = useRef<MetaComposerHandle>(null);
+  const ehCaixaUsa = useMemo(() => {
+    const fid = contatoAtivo?.folder_id;
+    if (!fid) return false;
+    const nome = (folders.find((f) => f.id === fid)?.nome || '').toUpperCase();
+    return nome.includes('USA B2B');
+  }, [contatoAtivo?.folder_id, folders]);
+  useEffect(() => { setTraducaoVisivel(false); setTraducoesMsg({}); }, [contatoAtivo?.id]);
+  const alternarTraducao = async () => {
+    if (traducaoVisivel) { setTraducaoVisivel(false); return; }
+    const pendentes = mensagens
+      .filter((m) => !traducoesMsg[m.id] && String(m.conteudo || '').trim())
+      .slice(-60);
+    if (pendentes.length === 0) { setTraducaoVisivel(true); return; }
+    setTraduzindoConversa(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('traduzir-texto', {
+        body: { modo: 'para_pt', textos: pendentes.map((m) => String(m.conteudo).slice(0, 4000)) },
+      });
+      const out = (data as any)?.traducoes;
+      if (error || !Array.isArray(out)) throw new Error((data as any)?.error || 'Falha na tradução');
+      setTraducoesMsg((prev) => {
+        const n = { ...prev };
+        pendentes.forEach((m, i) => { n[m.id] = out[i]; });
+        return n;
+      });
+      setTraducaoVisivel(true);
+    } catch (e: any) {
+      toast({ title: 'Tradução', description: e?.message || 'Não foi possível traduzir a conversa.', variant: 'destructive' });
+    } finally { setTraduzindoConversa(false); }
+  };
   // Copiloto de objeções (sugestões de resposta)
   const [sugestoesFechadas, setSugestoesFechadas] = useState<Set<string>>(new Set());
   const [sugestaoManualId, setSugestaoManualId] = useState<string | null>(null);
@@ -2680,6 +2713,12 @@ export default function InboxMeta() {
                 </div>
 
                 <div className="flex flex-wrap items-center gap-1.5 sm:gap-2 sm:shrink-0">
+                  {ehCaixaUsa && (
+                    <Button variant={traducaoVisivel ? 'default' : 'outline'} size="sm" className="h-8" onClick={alternarTraducao} disabled={traduzindoConversa}>
+                      {traduzindoConversa ? <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" /> : <Languages className="h-3.5 w-3.5 mr-1" />}
+                      {traducaoVisivel ? 'Ocultar tradução' : 'Traduzir conversa'}
+                    </Button>
+                  )}
                   {contatoAtivo.folder_id == null && (
                     <MetaConversationCost
                       contatoId={contatoAtivo.id}
@@ -2974,6 +3013,11 @@ export default function InboxMeta() {
                                 formatMsgTime={formatMsgTime}
                                 possivelmenteNaoEntregue={naoEntregue}
                               />
+                              {traducaoVisivel && traducoesMsg[m.id] && (
+                                <div className={`flex ${m.direcao === 'saida' ? 'justify-end' : 'justify-start'} px-2 -mt-1 mb-1`}>
+                                  <p className="max-w-[75%] text-[11.5px] italic leading-snug text-muted-foreground border-l-2 border-primary/40 pl-2 whitespace-pre-wrap">🇧🇷 {traducoesMsg[m.id]}</p>
+                                </div>
+                              )}
                               {mostraAviso && (
                                 <div className="w-full flex justify-center mt-1 mb-1 px-2">
                                   <p className="text-[10.5px] leading-snug text-amber-600 dark:text-amber-400 max-w-[85%] text-center">
@@ -3162,6 +3206,7 @@ export default function InboxMeta() {
                       onInitialTextConsumed={() => setPendingTranscricao('')}
                       mensagensRapidas={msgRapidas}
                       conversationKey={contatoAtivo.id}
+                      traducaoAtiva={ehCaixaUsa}
                     />
                   </div>
                 )}

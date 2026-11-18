@@ -1,7 +1,9 @@
 import { memo, useState, useRef, useCallback, useEffect, forwardRef, useImperativeHandle, useMemo } from 'react';
 import { Textarea } from '@/components/ui/textarea';
 import { Button } from '@/components/ui/button';
-import { Loader2, Send, Zap } from 'lucide-react';
+import { Loader2, Send, Zap, Languages } from 'lucide-react';
+import { supabase } from '@/integrations/supabase/client';
+import { toast } from 'sonner';
 import type { MetaMsgRapida } from './MetaMensagensRapidasDialog';
 
 interface Props {
@@ -15,6 +17,8 @@ interface Props {
   onInitialTextConsumed?: () => void;
   mensagensRapidas?: MetaMsgRapida[];
   conversationKey?: string;
+  /** Exibe botões para reescrever o texto em inglês/espanhol (caixa USA B2B). */
+  traducaoAtiva?: boolean;
 }
 
 export interface MetaComposerHandle {
@@ -25,10 +29,25 @@ export interface MetaComposerHandle {
 const LINHAS_AUTO = 4;
 
 const MetaComposerImpl = forwardRef<MetaComposerHandle, Props>(function MetaComposerImpl(
-  { disabled, enviando, placeholder, onSend, onPaste, onEscape, initialText, onInitialTextConsumed, mensagensRapidas = [], conversationKey },
+  { disabled, enviando, placeholder, onSend, onPaste, onEscape, initialText, onInitialTextConsumed, mensagensRapidas = [], conversationKey, traducaoAtiva = false },
   ref,
 ) {
   const [texto, setTexto] = useState('');
+  const [traduzindo, setTraduzindo] = useState<null | 'para_en' | 'para_es'>(null);
+  const reescrever = async (modo: 'para_en' | 'para_es') => {
+    const original = texto.trim();
+    if (!original || traduzindo) return;
+    setTraduzindo(modo);
+    try {
+      const { data, error } = await supabase.functions.invoke('traduzir-texto', { body: { modo, textos: [original] } });
+      const t = (data as any)?.traducoes?.[0];
+      if (error || !t) throw new Error((data as any)?.error || 'Falha na tradução');
+      setTexto(t);
+      taRef.current?.focus();
+    } catch (e: any) {
+      toast.error(e?.message || 'Não foi possível reescrever. Seu texto foi mantido.');
+    } finally { setTraduzindo(null); }
+  };
   const [atalhoSelecionado, setAtalhoSelecionado] = useState(0);
   const taRef = useRef<HTMLTextAreaElement>(null);
   const termoAtalho = texto.startsWith('/') && !texto.includes('\n') ? texto.slice(1).trim().toLocaleLowerCase('pt-BR') : null;
@@ -266,6 +285,19 @@ const MetaComposerImpl = forwardRef<MetaComposerHandle, Props>(function MetaComp
           rows={1}
         />
       </div>
+      {traducaoAtiva && (
+        <div className="flex flex-col gap-1 shrink-0">
+          {(['para_en', 'para_es'] as const).map((m) => (
+            <Button key={m} type="button" variant="outline" size="sm" className="h-7 px-2 text-xs"
+              disabled={disabled || !texto.trim() || !!traduzindo}
+              onClick={() => reescrever(m)}
+              title={m === 'para_en' ? 'Reescrever em inglês' : 'Reescrever em espanhol'}>
+              {traduzindo === m ? <Loader2 className="h-3 w-3 animate-spin" /> : <Languages className="h-3 w-3 mr-1" />}
+              {m === 'para_en' ? 'Inglês' : 'Espanhol'}
+            </Button>
+          ))}
+        </div>
+      )}
       <Button onClick={submit} disabled={disabled || enviando || !texto.trim()} aria-label="Enviar mensagem" size="icon" className="shrink-0">
         {enviando ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
       </Button>
