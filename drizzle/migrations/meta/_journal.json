@@ -1835,6 +1835,13 @@
       "when": 1795020935011,
       "tag": "0261_usa_etiquetas_proprias",
       "breakpoints": true
+    },
+    {
+      "idx": 262,
+      "version": "7",
+      "when": 1795021608779,
+      "tag": "0262_usa_qualificacoes_proprias",
+      "breakpoints": true
     }
   ]
 }

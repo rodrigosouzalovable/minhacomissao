@@ -277,6 +277,7 @@ export default function InboxMeta() {
   const [qualifCaixas, setQualifCaixas] = useState<Record<string, boolean>>({});
   const [alertaEsperaCaixas, setAlertaEsperaCaixas] = useState<Record<string, boolean>>({});
   const [qualifDialogOpen, setQualifDialogOpen] = useState(false);
+  const [qualifGerenciar, setQualifGerenciar] = useState(false);
   const [qualifContatoAlvo, setQualifContatoAlvo] = useState<MetaContato | null>(null);
   const [filtroQualifs, setFiltroQualifs] = useState<Set<string>>(new Set());
   const [filtroQualifOpen, setFiltroQualifOpen] = useState(false);
@@ -1926,7 +1927,7 @@ export default function InboxMeta() {
               <Button size="icon" variant="ghost" className="h-8 w-8" onClick={toggleTema} title={tema === 'dark' ? 'Modo claro' : 'Modo escuro'}>
                 {tema === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
               </Button>
-              <Button size="icon" variant="outline" className="h-8 w-8" onClick={() => setNovaConversaOpen(true)} title="Nova conversa">
+              <Button size="icon" variant="outline" className="h-8 w-8" onClick={() => setNovaConversaOpen(true)} title={tr('Nova conversa')}>
                 <Plus className="h-4 w-4" />
               </Button>
             </div>
@@ -1951,8 +1952,8 @@ export default function InboxMeta() {
                     variant={filtroEtiqueta.size > 0 ? 'default' : 'outline'}
                     size="sm"
                     className="h-8 px-2 gap-1"
-                    title="Filtrar por etiquetas"
-                    aria-label="Filtrar por etiquetas"
+                    title={tr('Filtrar por etiquetas')}
+                    aria-label={tr('Filtrar por etiquetas')}
                   >
                     <Tag className="h-3.5 w-3.5" />
                     {filtroEtiqueta.size > 0 && <span className="text-[10px] leading-none">{filtroEtiqueta.size}</span>}
@@ -1966,12 +1967,12 @@ export default function InboxMeta() {
                         onClick={() => setFiltroEtiqueta(new Set())}
                         className="text-[11px] text-primary hover:underline"
                       >
-                        Limpar
+                        {tr('Limpar')}
                       </button>
                     )}
                   </div>
                   <div
-                    className="label-filter-scroll h-[min(420px,calc(100vh-10rem))] min-h-0 overflow-y-scroll overscroll-contain pr-1"
+                    className="label-filter-scroll max-h-[min(420px,calc(100vh-10rem))] min-h-0 overflow-y-auto overscroll-contain pr-1"
                     style={{ scrollbarWidth: 'auto', scrollbarColor: 'hsl(var(--muted-foreground)) hsl(var(--muted))' }}
                     onWheel={(event) => event.stopPropagation()}
                     onTouchMove={(event) => event.stopPropagation()}
@@ -1992,7 +1993,7 @@ export default function InboxMeta() {
                                 className="h-5 w-5 rounded-full border-2 transition-transform"
                                 style={{ backgroundColor: c, borderColor: editEtCor === c ? 'hsl(var(--foreground))' : 'transparent', transform: editEtCor === c ? 'scale(1.15)' : 'scale(1)' }} />
                             ))}
-                            <input type="color" aria-label="Escolher outra cor" title="Escolher qualquer cor"
+                            <input type="color" aria-label={tr('Escolher outra cor')} title={tr('Escolher qualquer cor')}
                               className="h-5 w-5 cursor-pointer rounded-full border-0 bg-transparent p-0"
                               value={/^#[0-9a-f]{6}$/i.test(editEtCor) ? editEtCor : '#25D366'}
                               onChange={(e) => setEditEtCor(e.target.value)} />
@@ -2037,7 +2038,7 @@ export default function InboxMeta() {
                         <button
                           onClick={(e) => { e.stopPropagation(); setEditEtId(et.id); setEditEtCor(et.cor); }}
                           className="opacity-0 group-hover:opacity-100 transition-opacity p-0.5 hover:bg-background rounded"
-                          title="Editar cor">
+                          title={tr('Editar cor')}>
                           <Pencil className="h-3 w-3" />
                         </button>
                       </div>
@@ -2065,8 +2066,8 @@ export default function InboxMeta() {
                     variant={filtroQualifs.size > 0 ? 'default' : 'outline'}
                     size="sm"
                     className="h-8 px-2 gap-1"
-                    title="Filtrar por qualificações"
-                    aria-label="Filtrar por qualificações"
+                    title={tr('Filtrar por qualificações')}
+                    aria-label={tr('Filtrar por qualificações')}
                   >
                     <Bookmark className="h-3.5 w-3.5" />
                     {filtroQualifs.size > 0 && <span className="text-[10px] leading-none">{filtroQualifs.size}</span>}
@@ -2075,7 +2076,7 @@ export default function InboxMeta() {
                 <PopoverContent className="w-60 p-2" align="end">
                   <div className="space-y-1 max-h-72 overflow-y-auto overscroll-contain">
                     {qualificacoes.filter(q => q.ativo && !q.parent_id).length === 0 && (
-                      <p className="text-[11px] text-muted-foreground">Nenhuma qualificação ativa.</p>
+                      <p className="text-[11px] text-muted-foreground">{tr('Nenhuma qualificação ativa.')}</p>
                     )}
                     {qualificacoes.filter(q => q.ativo && !q.parent_id).flatMap(p => [
                       p,
@@ -2105,8 +2106,16 @@ export default function InboxMeta() {
                   </div>
                   {filtroQualifs.size > 0 && (
                     <Button variant="ghost" size="sm" className="w-full h-7 text-[11px] mt-1" onClick={() => setFiltroQualifs(new Set())}>
-                      Limpar qualificações
+                      {tr('Limpar qualificações')}
                     </Button>
+                  )}
+                  {(isAdmin || !!usaLang) && (
+                    <button
+                      onClick={() => { setFiltroQualifOpen(false); setQualifContatoAlvo(null); setQualifGerenciar(true); setQualifDialogOpen(true); }}
+                      className="w-full flex items-center gap-2 text-xs px-2 py-1.5 mt-1 rounded border border-border hover:bg-accent font-medium">
+                      <Settings2 className="h-3.5 w-3.5" />
+                      {tr('Gerenciar qualificações')}
+                    </button>
                   )}
                 </PopoverContent>
               </Popover>
@@ -2115,7 +2124,7 @@ export default function InboxMeta() {
                 size="sm"
                 className="h-8 px-2"
                 onClick={() => setFiltroJanela24h(v => !v)}
-                title="Filtrar conversas com janela 24h ativa (verde/amarela)"
+                title={tr('Filtrar conversas com janela 24h ativa (verde/amarela)')}
               >
                 <Clock className={cn('h-3.5 w-3.5', !filtroJanela24h && 'text-green-600')} />
               </Button>
@@ -2144,7 +2153,7 @@ export default function InboxMeta() {
               </button>
               {separarCampanhas && (
                 <button onClick={() => setFiltroLeitura('campanha')}
-                  title="Clientes que receberam campanha e ainda não responderam"
+                  title={tr('Clientes que receberam campanha e ainda não responderam')}
                   className={cn('flex-1 text-xs py-1 rounded transition', filtroLeitura === 'campanha' ? 'bg-background shadow-sm' : 'text-muted-foreground')}>
                   Envios de campanha
                 </button>
@@ -2157,7 +2166,7 @@ export default function InboxMeta() {
                 size="sm"
                 className="w-full h-8 text-xs"
                 onClick={() => setModoMeusClientes(v => !v)}
-                title="Todas as conversas com a minha etiqueta de atendente"
+                title={tr('Todas as conversas com a minha etiqueta de atendente')}
               >
                 <Users className="h-3.5 w-3.5 mr-1" /> {tr('Meus Clientes')}
               </Button>}
@@ -2199,7 +2208,7 @@ export default function InboxMeta() {
                       </PopoverContent>
                     </Popover>
                     {(mcDataIni || mcDataFim) && (
-                      <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => { setMcDataIni(undefined); setMcDataFim(undefined); }} title="Limpar datas">
+                      <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => { setMcDataIni(undefined); setMcDataFim(undefined); }} title={tr('Limpar datas')}>
                         <X className="h-3.5 w-3.5" />
                       </Button>
                     )}
@@ -2216,7 +2225,7 @@ export default function InboxMeta() {
                     <PopoverContent className="w-56 p-2" align="start">
                       <div className="space-y-1 max-h-60 overflow-y-auto">
                         {qualificacoes.filter(q => q.ativo && !q.parent_id).length === 0 && (
-                          <p className="text-[11px] text-muted-foreground">Nenhuma qualificação ativa.</p>
+                          <p className="text-[11px] text-muted-foreground">{tr('Nenhuma qualificação ativa.')}</p>
                         )}
                         {qualificacoes.filter(q => q.ativo && !q.parent_id).flatMap(p => [
                           p,
@@ -2273,8 +2282,8 @@ export default function InboxMeta() {
                 onClick={() => { void atualizarCaixas(); }}
                 disabled={caixasCarregando}
                 className="text-[11px] px-1.5 py-1 rounded border border-transparent bg-muted/40 text-muted-foreground hover:bg-accent disabled:opacity-60"
-                title="Atualizar caixas de mensagens"
-                aria-label="Atualizar caixas de mensagens"
+                title={tr('Atualizar caixas de mensagens')}
+                aria-label={tr('Atualizar caixas de mensagens')}
               >
                 <RefreshCw className={cn('h-3 w-3', caixasCarregando && 'animate-spin')} />
               </button>
@@ -2287,7 +2296,7 @@ export default function InboxMeta() {
                         'text-[11px] px-2 py-1 rounded border transition',
                         currentFolderId === null ? 'bg-primary text-primary-foreground border-primary' : 'bg-muted/40 text-muted-foreground border-transparent hover:bg-accent',
                       )}
-                      title="Caixa padrão (mensagens da equipe)"
+                      title={tr('Caixa padrão (mensagens da equipe)')}
                     >
                       Padrão
                     </button>
@@ -2360,7 +2369,7 @@ export default function InboxMeta() {
                 <button
                   onClick={() => setIaConfigOpen(true)}
                   className="text-[11px] px-2 py-1 rounded border border-dashed border-primary/50 text-primary hover:bg-accent flex items-center gap-1"
-                  title="Configurar modelos e regras da IA"
+                  title={tr('Configurar modelos e regras da IA')}
                 >
                   <Bot className="h-3 w-3" /> Configurar IA
                 </button>
@@ -2379,7 +2388,7 @@ export default function InboxMeta() {
                       <PopoverTrigger asChild>
                         <button
                           className="text-[11px] px-2 py-1 rounded border border-dashed border-border hover:bg-accent text-muted-foreground flex items-center gap-1"
-                          title="Caixas ocultas"
+                          title={tr('Caixas ocultas')}
                         >
                           <EyeOff className="h-3 w-3" /> Caixas Ocultas ({foldersOcultos.length})
                         </button>
@@ -2418,7 +2427,7 @@ export default function InboxMeta() {
               <button
                 onClick={() => setFoldersDialogOpen(true)}
                 className="text-[11px] px-1.5 py-1 rounded border border-dashed border-border hover:bg-accent text-muted-foreground"
-                title="Gerenciar caixas de mensagens"
+                title={tr('Gerenciar caixas de mensagens')}
               >
                 <Plus className="h-3 w-3" />
               </button>
@@ -2432,13 +2441,13 @@ export default function InboxMeta() {
                 <Button size="icon" variant="ghost" className="h-6 w-6" onClick={arquivarSelecionados} title={abaAtiva === 'arquivados' ? 'Desarquivar' : 'Arquivar'}>
                   <Archive className="h-3.5 w-3.5" />
                 </Button>
-                <Button size="icon" variant="ghost" className="h-6 w-6" onClick={dispensarSelecionados} title="Não precisa de resposta">
+                <Button size="icon" variant="ghost" className="h-6 w-6" onClick={dispensarSelecionados} title={tr('Não precisa de resposta')}>
                   <CheckSquare className="h-3.5 w-3.5" />
                 </Button>
-                <Button size="icon" variant="ghost" className="h-6 w-6" onClick={excluirSelecionados} title="Excluir">
+                <Button size="icon" variant="ghost" className="h-6 w-6" onClick={excluirSelecionados} title={tr('Excluir')}>
                   <Trash2 className="h-3.5 w-3.5 text-destructive" />
                 </Button>
-                <Button size="icon" variant="ghost" className="h-6 w-6" onClick={sairMultipla} title="Cancelar">
+                <Button size="icon" variant="ghost" className="h-6 w-6" onClick={sairMultipla} title={tr('Cancelar')}>
                   <X className="h-3.5 w-3.5" />
                 </Button>
               </div>
@@ -2645,7 +2654,7 @@ export default function InboxMeta() {
                     variant="ghost"
                     className="h-8 w-8 shrink-0 sm:hidden -ml-1"
                     onClick={() => setContatoAtivo(null)}
-                    title="Voltar para conversas"
+                    title={tr('Voltar para conversas')}
                   >
                     <ArrowLeft className="h-4 w-4" />
                   </Button>
@@ -2678,7 +2687,7 @@ export default function InboxMeta() {
                         <button
                           type="button"
                           className="inline-flex items-center gap-1 rounded border px-1.5 py-0.5 hover:bg-accent"
-                          title="Credor desta conversa (clique para alterar)"
+                          title={tr('Credor desta conversa (clique para alterar)')}
                         >
                           {(() => {
                             const marca = getCredorMarca(contatoAtivo.credor);
@@ -2740,8 +2749,8 @@ export default function InboxMeta() {
                         setQualifContatoAlvo(contatoAtivo);
                         setQualifDialogOpen(true);
                       }}
-                      title="Qualificar esta conversa"
-                      aria-label="Qualificar esta conversa"
+                      title={tr('Qualificar esta conversa')}
+                      aria-label={tr('Qualificar esta conversa')}
                     >
                       {(() => {
                         const sel = (qualifPorContato[contatoAtivo.id] ?? [])
@@ -2768,8 +2777,8 @@ export default function InboxMeta() {
                     variant="outline"
                     className="h-7 w-7 p-0"
                     onClick={() => setModeloMsgOpen(true)}
-                    title="Gerar mensagem de negociação (Modelo Mensagem)"
-                    aria-label="Modelo de mensagem"
+                    title={tr('Gerar mensagem de negociação (Modelo Mensagem)')}
+                    aria-label={tr('Modelo de mensagem')}
                   >
                     <FileText className="h-3.5 w-3.5" />
                   </Button>
@@ -2778,8 +2787,8 @@ export default function InboxMeta() {
                     variant="outline"
                     className="h-7 w-7 p-0"
                     onClick={() => setConsultaUmeOpen(true)}
-                    title="Consultar UME (calculadora de desconto)"
-                    aria-label="Consultar UME"
+                    title={tr('Consultar UME (calculadora de desconto)')}
+                    aria-label={tr('Consultar UME')}
                   >
                     <Calculator className="h-3.5 w-3.5" />
                   </Button>
@@ -2788,8 +2797,8 @@ export default function InboxMeta() {
                     variant="outline"
                     className="h-7 w-7 p-0"
                     onClick={() => setGerarAcordoUmeOpen(true)}
-                    title="Gerar acordo na UME"
-                    aria-label="Gerar acordo UME"
+                    title={tr('Gerar acordo na UME')}
+                    aria-label={tr('Gerar acordo UME')}
                   >
                     <Handshake className="h-3.5 w-3.5" />
                   </Button>
@@ -2798,8 +2807,8 @@ export default function InboxMeta() {
                      variant="outline"
                      className="h-7 w-7 p-0"
                      onClick={() => setLancarAcordoOpen(true)}
-                     title="Lançar acordo desta negociação"
-                     aria-label="Lançar acordo desta negociação"
+                     title={tr('Lançar acordo desta negociação')}
+                     aria-label={tr('Lançar acordo desta negociação')}
                    >
                      <Plus className="h-3.5 w-3.5" />
                    </Button>
@@ -2823,8 +2832,8 @@ export default function InboxMeta() {
                             setSugestaoManualId(ultimaEntrada.id);
                           }
                         }}
-                        title="Sugestões de resposta (copiloto de objeções)"
-                        aria-label="Sugestões de resposta"
+                        title={tr('Sugestões de resposta (copiloto de objeções)')}
+                        aria-label={tr('Sugestões de resposta')}
                       >
                         <Lightbulb className="h-3.5 w-3.5" />
                       </Button>
@@ -2864,7 +2873,7 @@ export default function InboxMeta() {
                                     ? 'Pedido de permissão enviado — reenviar'
                                     : 'Pedir permissão do cliente para ligar'
                           }
-                          aria-label="Ligar para o cliente"
+                          aria-label={tr('Ligar para o cliente')}
                         >
                           <Phone className="h-3.5 w-3.5" />
                         </Button>
@@ -2890,8 +2899,8 @@ export default function InboxMeta() {
                     variant="outline"
                     className="h-7 w-7 p-0"
                     onClick={() => setAgendarRetornoOpen(true)}
-                    title="Agendar retorno para este cliente"
-                    aria-label="Agendar retorno"
+                    title={tr('Agendar retorno para este cliente')}
+                    aria-label={tr('Agendar retorno')}
                   >
                     <Clock className="h-3.5 w-3.5" />
                   </Button>
@@ -3003,7 +3012,7 @@ export default function InboxMeta() {
                                 <span className="text-[10px] px-2 py-0.5 rounded-full bg-muted text-muted-foreground">{dStr}</span>
                               </div>
                             )}
-                            <div onDoubleClick={() => setRespondendo(m)} title="Duplo clique para responder">
+                            <div onDoubleClick={() => setRespondendo(m)} title={tr('Duplo clique para responder')}>
                               <ChatMessage
                                 msg={{
                                   id: m.id, conteudo: m.conteudo, direcao: m.direcao,
@@ -3172,8 +3181,8 @@ export default function InboxMeta() {
                     <Button variant="ghost" size="icon" className="shrink-0"
                       disabled={!janelaInfo.aberta || enviando || enviandoArquivo}
                       onClick={() => setMsgRapidasOpen(true)}
-                      title="Respostas rápidas"
-                      aria-label="Respostas rápidas">
+                      title={tr('Respostas rápidas')}
+                      aria-label={tr('Respostas rápidas')}>
                       <Zap className="h-4 w-4" />
                     </Button>
                     <Button variant="ghost" size="icon" className="shrink-0"
@@ -3185,7 +3194,7 @@ export default function InboxMeta() {
                       <DropdownMenuTrigger asChild>
                         <Button variant="ghost" size="icon" className="shrink-0"
                           disabled={!janelaInfo.aberta || enviando || enviandoArquivo}
-                          title="Gravar áudio">
+                          title={tr('Gravar áudio')}>
                           <Mic className="h-4 w-4" />
                         </Button>
                       </DropdownMenuTrigger>
@@ -3318,7 +3327,7 @@ export default function InboxMeta() {
         open={qualifDialogOpen}
         onOpenChange={(open) => {
           setQualifDialogOpen(open);
-          if (!open) setQualifContatoAlvo(null);
+          if (!open) { setQualifContatoAlvo(null); setQualifGerenciar(false); }
         }}
         contatoId={qualifContatoAlvo?.id ?? contatoAtivo?.id ?? null}
         contatoNome={nomeExibido(qualifContatoAlvo ?? contatoAtivo) || undefined}
@@ -3326,7 +3335,9 @@ export default function InboxMeta() {
           ? (qualifPorContato[qualifContatoAlvo.id] ?? [])
           : contatoAtivo ? (qualifPorContato[contatoAtivo.id] ?? []) : []}
         qualificacoes={qualificacoes}
-        isAdmin={isAdmin}
+        isAdmin={isAdmin || !!usaLang}
+        abrirGerenciar={qualifGerenciar}
+        tr={tr}
         onQualificar={(cid, qids) => setQualifPorContato(prev => {
           const next = { ...prev };
           if (qids.length) next[cid] = qids; else delete next[cid];

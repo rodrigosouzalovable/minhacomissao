@@ -32,11 +32,13 @@ interface Props {
   isAdmin: boolean;
   onQualificar: (contatoId: string, qualificacaoIds: string[]) => void;
   onQualificacoesChange: () => void;
+  abrirGerenciar?: boolean;
+  tr?: (pt: string) => string;
 }
 
 export function MetaQualificacaoDialog({
   open, onOpenChange, contatoId, contatoNome, atuais, qualificacoes, isAdmin,
-  onQualificar, onQualificacoesChange,
+  onQualificar, onQualificacoesChange, abrirGerenciar = false, tr = (t: string) => t,
 }: Props) {
   const { toast } = useToast();
   const [modoConfig, setModoConfig] = useState(false);
@@ -56,8 +58,10 @@ export function MetaQualificacaoDialog({
       setEscolhendoMotivosDe(null);
       setMotivosSel([]);
       setNovoNome('');
+    } else if (abrirGerenciar) {
+      setModoConfig(true);
     }
-  }, [open]);
+  }, [open, abrirGerenciar]);
 
   const primarias = useMemo(() => qualificacoes.filter(q => !q.parent_id), [qualificacoes]);
   const motivosPorPai = useMemo(() => {
@@ -110,7 +114,7 @@ export function MetaQualificacaoDialog({
       setEscolhendoMotivosDe(null);
       setMotivosSel([]);
     } catch (e: any) {
-      toast({ title: 'Erro ao qualificar', description: e.message, variant: 'destructive' });
+      toast({ title: tr('Erro ao qualificar'), description: e.message, variant: 'destructive' });
     } finally {
       setSalvando(false);
     }
@@ -126,7 +130,7 @@ export function MetaQualificacaoDialog({
       if (error) throw error;
       onQualificar(contatoId, atuais.filter(id => !ids.includes(id)));
     } catch (e: any) {
-      toast({ title: 'Erro ao qualificar', description: e.message, variant: 'destructive' });
+      toast({ title: tr('Erro ao qualificar'), description: e.message, variant: 'destructive' });
     } finally {
       setSalvando(false);
     }
@@ -156,14 +160,14 @@ export function MetaQualificacaoDialog({
     const ordem = (irmaos.reduce((m, q) => Math.max(m, q.ordem), 0) || 0) + 1;
     const { error } = await (supabase as any).from('meta_qualificacoes')
       .insert({ nome, cor: novaCor, ordem, parent_id: parentId });
-    if (error) return toast({ title: 'Erro', description: error.message, variant: 'destructive' });
+    if (error) return toast({ title: tr('Erro'), description: error.message, variant: 'destructive' });
     setNovoNome('');
     onQualificacoesChange();
   };
 
   const atualizar = async (id: string, patch: Partial<MetaQualificacao>) => {
     const { error } = await (supabase as any).from('meta_qualificacoes').update(patch).eq('id', id);
-    if (error) return toast({ title: 'Erro', description: error.message, variant: 'destructive' });
+    if (error) return toast({ title: tr('Erro'), description: error.message, variant: 'destructive' });
     onQualificacoesChange();
   };
 
@@ -172,13 +176,13 @@ export function MetaQualificacaoDialog({
       .select('contato_id', { count: 'exact', head: true }).eq('qualificacao_id', id);
     if ((count ?? 0) > 0) {
       return toast({
-        title: 'Não é possível excluir',
+        title: tr('Não é possível excluir'),
         description: `${count} conversa(s) usam esta qualificação. Inative em vez de excluir.`,
         variant: 'destructive',
       });
     }
     const { error } = await (supabase as any).from('meta_qualificacoes').delete().eq('id', id);
-    if (error) return toast({ title: 'Erro', description: error.message, variant: 'destructive' });
+    if (error) return toast({ title: tr('Erro'), description: error.message, variant: 'destructive' });
     onQualificacoesChange();
   };
 
@@ -189,7 +193,7 @@ export function MetaQualificacaoDialog({
     <div className="flex min-h-0 flex-1 flex-col gap-3">
       <div className="space-y-2 flex-1 min-h-0 overflow-y-auto scrollbar-thin pr-1">
         {itens.length === 0 && (
-          <p className="text-sm text-muted-foreground">Nenhum item cadastrado ainda.</p>
+          <p className="text-sm text-muted-foreground">{tr('Nenhum item cadastrado ainda.')}</p>
         )}
 
         {itens.map(q => (
@@ -242,7 +246,7 @@ export function MetaQualificacaoDialog({
         <Input
           value={novoNome}
           onChange={(e) => setNovoNome(e.target.value)}
-          placeholder={parentId ? 'Novo motivo' : 'Nova qualificação'}
+          placeholder={parentId ? tr('Novo motivo') : tr('Nova qualificação')}
           className="h-8 text-sm"
           onKeyDown={(e) => { if (e.key === 'Enter') criar(parentId); }}
         />
@@ -253,10 +257,10 @@ export function MetaQualificacaoDialog({
     </div>
   );
 
-  let titulo = 'Qualificação';
+  let titulo = tr('Qualificação');
   if (paiEscolha) titulo = `Motivo: ${paiEscolha.nome}`;
   else if (paiConfig) titulo = `Motivos de: ${paiConfig.nome}`;
-  else if (modoConfig) titulo = 'Gerenciar qualificações';
+  else if (modoConfig) titulo = tr('Gerenciar qualificações');
 
   const voltar = () => {
     if (paiEscolha) { setEscolhendoMotivosDe(null); setMotivosSel([]); return; }
@@ -279,12 +283,12 @@ export function MetaQualificacaoDialog({
           </DialogTitle>
           <DialogDescription>
             {paiEscolha
-              ? 'Selecione o motivo (pode marcar mais de um) para concluir a qualificação.'
+              ? tr('Selecione o motivo (pode marcar mais de um) para concluir a qualificação.')
               : paiConfig
-                ? 'Crie, renomeie, ative/inative ou exclua os motivos desta qualificação.'
+                ? tr('Crie, renomeie, ative/inative ou exclua os motivos desta qualificação.')
                 : modoConfig
-                  ? 'Clique no ícone de lista para configurar os motivos de cada qualificação.'
-                  : contatoNome || 'Selecione uma ou mais qualificações para esta conversa.'}
+                  ? tr('Clique no ícone de lista para configurar os motivos de cada qualificação.')
+                  : contatoNome || tr('Selecione uma ou mais qualificações para esta conversa.')}
           </DialogDescription>
         </DialogHeader>
 
@@ -319,10 +323,10 @@ export function MetaQualificacaoDialog({
               disabled={salvando || motivosSel.length === 0}
               onClick={() => gravar(paiEscolha.id, motivosSel)}
             >
-              {salvando ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Salvar qualificação'}
+              {salvando ? <Loader2 className="h-4 w-4 animate-spin" /> : tr('Salvar qualificação')}
             </Button>
             {motivosSel.length === 0 && (
-              <p className="text-xs text-muted-foreground">Selecione o motivo para salvar.</p>
+              <p className="text-xs text-muted-foreground">{tr('Selecione o motivo para salvar.')}</p>
             )}
           </div>
         ) : paiConfig ? (
@@ -332,7 +336,7 @@ export function MetaQualificacaoDialog({
         ) : (
           <div className="flex min-h-0 flex-1 flex-col gap-3">
             {ativas.length === 0 && (
-              <p className="text-sm text-muted-foreground">Nenhuma qualificação ativa.</p>
+              <p className="text-sm text-muted-foreground">{tr('Nenhuma qualificação ativa.')}</p>
             )}
             <div className="grid grid-cols-1 gap-2 flex-1 min-h-0 overflow-y-auto scrollbar-thin pr-1">
 
@@ -384,7 +388,7 @@ export function MetaQualificacaoDialog({
                         <ContextMenuItem disabled className="text-xs text-muted-foreground">
                           {motivosAtivos(q.id).length > 0
                             ? `${motivosAtivos(q.id).length} motivo(s) configurado(s)`
-                            : 'Sem motivos configurados'}
+                            : tr('Sem motivos configurados')}
                         </ContextMenuItem>
                       )}
                     </ContextMenuContent>
@@ -395,12 +399,12 @@ export function MetaQualificacaoDialog({
             <div className="shrink-0 space-y-2 border-t pt-3">
               {salvando && <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />}
               <p className="text-xs text-muted-foreground">
-                Você pode marcar várias qualificações. Clique em uma marcada para removê-la.
-                {isAdmin && ' Clique com o botão direito para configurar os motivos.'}
+                {tr('Você pode marcar várias qualificações. Clique em uma marcada para removê-la.')}
+                {isAdmin && ' ' + tr('Clique com o botão direito para configurar os motivos.')}
               </p>
               {isAdmin && (
                 <Button variant="outline" size="sm" className="w-full" onClick={() => setModoConfig(true)}>
-                  <Settings className="h-4 w-4 mr-2" /> Gerenciar qualificações
+                  <Settings className="h-4 w-4 mr-2" /> {tr('Gerenciar qualificações')}
                 </Button>
               )}
             </div>
