@@ -1,3 +1,4 @@
+import { clienteUsaAtivo, gerarRespostaClienteUsa } from '../_shared/cliente-usa-ia.ts';
 import { mask } from '../_shared/auth-guard.ts';
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
@@ -1911,6 +1912,35 @@ serve(async (req) => {
     // --- INBOX-ONLY MODE: Não responder automaticamente ---
     // Mensagens de clientes (não-admin, não-fromMe) são apenas salvas no Inbox
     if (!isFromMe && !isAdminNumber(inboxTelefone)) {
+      // Cliente USA B2B: a IA configurada pelo dono da instância responde.
+      try {
+        if (inboxInstanceToken && inboxTexto && inboxTipoConteudo === 'texto') {
+          const { data: inst } = await supabase.from('user_whatsapp_instances')
+            .select('id, user_id, server_url').eq('instance_token', inboxInstanceToken).maybeSingle();
+          if (inst?.user_id) {
+            const { data: cfg } = await supabase.from('cliente_usa_config').select('*').eq('user_id', inst.user_id).maybeSingle();
+            if (cfg?.ia_ativa && clienteUsaAtivo(cfg) && (cfg.respostas_usadas ?? 0) < (cfg.limite_respostas ?? 200)) {
+              const { data: hist } = await supabase.from('whatsapp_mensagens')
+                .select('conteudo, direcao').eq('instancia_id', inst.id).like('telefone_remoto', `%${inboxTelefone.slice(-8)}`)
+                .order('timestamp_msg', { ascending: false }).limit(10);
+              const historico = (hist || []).reverse()
+                .filter((m: any) => m.conteudo)
+                .map((m: any) => ({ role: m.direcao === 'saida' ? 'assistant' : 'user', content: String(m.conteudo).slice(0, 2000) })) as any[];
+              if (!historico.length || historico[historico.length - 1].content !== inboxTexto) historico.push({ role: 'user', content: inboxTexto });
+              const resposta = await gerarRespostaClienteUsa(cfg.prompt_ia, cfg.idioma, historico);
+              if (resposta) {
+                await sendMessage(inst.server_url || inboxServerUrl, inboxInstanceToken, inboxTelefone, resposta);
+                await supabase.from('cliente_usa_config').update({ respostas_usadas: (cfg.respostas_usadas ?? 0) + 1 }).eq('user_id', inst.user_id);
+              }
+              return new Response(JSON.stringify({ success: true, cliente_usa_ia: true }), {
+                headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+              });
+            }
+          }
+        }
+      } catch (usaErr) {
+        console.error('[CLIENTE-USA] Falha na resposta automática:', (usaErr as Error).message);
+      }
       console.log(`[INBOX-ONLY] Mensagem de ${mask(inboxTelefone)} salva no Inbox. Chatbot desativado - sem resposta automática.`);
       return new Response(JSON.stringify({ success: true, inbox_only: true }), {
         headers: { ...corsHeaders, 'Content-Type': 'application/json' },

@@ -44,7 +44,12 @@ async function authenticateUazapiAccess(req: Request) {
   if (permissionsError) return { error: json({ error: "Não foi possível validar a permissão" }, 500), requester: null, isAdmin: false };
 
   const abasPermitidas = Array.isArray(permissions?.abas_permitidas) ? permissions.abas_permitidas : null;
-  const hasAccess = Boolean(isAdmin) || abasPermitidas?.includes("/admin/acionamento") || (!permissions && Boolean(isGestor));
+  let hasAccess = Boolean(isAdmin) || abasPermitidas?.includes("/admin/acionamento") || (!permissions && Boolean(isGestor));
+  if (!hasAccess) {
+    // Clientes USA B2B (teste válido) conectam o próprio WhatsApp por QR Code.
+    const { data: usa } = await sb.from("cliente_usa_config").select("usa_b2b, teste_ate").eq("user_id", requester.id).maybeSingle();
+    hasAccess = Boolean(usa?.usa_b2b) && (!usa?.teste_ate || new Date(usa.teste_ate).getTime() > Date.now());
+  }
   if (!hasAccess) return { error: json({ error: "Sem acesso à aba UAZAPI" }, 403), requester: null, isAdmin: false };
 
   return { error: null, requester, isAdmin: Boolean(isAdmin) };

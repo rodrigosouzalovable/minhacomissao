@@ -75,6 +75,7 @@ const Cotacoes = lazy(() => retryImport(() => import("./pages/Cotacoes")));
 const LembreteMeta = lazy(() => retryImport(() => import("./pages/LembreteMeta")));
 const GoogleMapsLeads = lazy(() => retryImport(() => import("./pages/GoogleMapsLeads")));
 const FabricaVideos = lazy(() => retryImport(() => import("./pages/FabricaVideos")));
+const ClienteUsa = lazy(() => retryImport(() => import("./pages/ClienteUsa")));
 const ProspeccaoB2B = lazy(() => retryImport(() => import("./pages/ProspeccaoB2B")));
 const PontoAdmin = lazy(() => retryImport(() => import("./pages/PontoAdmin")));
 const Blacklist = lazy(() => retryImport(() => import("./pages/Blacklist")));
@@ -314,6 +315,7 @@ const App = () => (
             <Route path="/admin/google-maps-leads" element={<PermissionRoute><GoogleMapsLeads /></PermissionRoute>} />
             <Route path="/admin/fabrica-videos" element={<PermissionRoute><FabricaVideos /></PermissionRoute>} />
             <Route path="/admin/prospeccao-b2b" element={<PermissionRoute><ProspeccaoB2B /></PermissionRoute>} />
+            <Route path="/cliente-usa" element={<PermissionRoute><ClienteUsa /></PermissionRoute>} />
             <Route path="/admin/ponto" element={<AdminRoute><PontoAdmin /></AdminRoute>} />
              <Route path="/admin/blacklist" element={<PermissionRoute><Blacklist /></PermissionRoute>} />
               <Route path="/admin/dominios" element={<AdminRoute><AdminDominios /></AdminRoute>} />

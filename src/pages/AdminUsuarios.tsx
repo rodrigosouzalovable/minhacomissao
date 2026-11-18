@@ -32,6 +32,7 @@ import { EditPermissionsDialog } from '@/components/EditPermissionsDialog';
 import { WhatsAppLembreteConfigDialog } from '@/components/WhatsAppLembreteConfigDialog';
 import { TransferAcordosDialog } from '@/components/TransferAcordosDialog';
 import { IagoConfigDialog } from '@/components/admin/IagoConfigDialog';
+import { ClienteUsaToggles } from '@/components/admin/ClienteUsaToggles';
 import { useAuth } from '@/hooks/useAuth';
 import {
   AlertDialog,
@@ -641,6 +642,7 @@ export default function AdminUsuarios() {
                             >
                               Salvar
                             </Button>
+                            <ClienteUsaToggles userId={user.id} />
                             {ehIago(user) && (
                               <Button
                                 size="sm"

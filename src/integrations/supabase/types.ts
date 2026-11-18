@@ -1899,6 +1899,45 @@ export type Database = {
           },
         ]
       }
+      cliente_usa_config: {
+        Row: {
+          atualizado_em: string
+          criado_em: string
+          ia_ativa: boolean
+          idioma: string
+          limite_respostas: number
+          prompt_ia: string
+          respostas_usadas: number
+          teste_ate: string | null
+          usa_b2b: boolean
+          user_id: string
+        }
+        Insert: {
+          atualizado_em?: string
+          criado_em?: string
+          ia_ativa?: boolean
+          idioma?: string
+          limite_respostas?: number
+          prompt_ia?: string
+          respostas_usadas?: number
+          teste_ate?: string | null
+          usa_b2b?: boolean
+          user_id: string
+        }
+        Update: {
+          atualizado_em?: string
+          criado_em?: string
+          ia_ativa?: boolean
+          idioma?: string
+          limite_respostas?: number
+          prompt_ia?: string
+          respostas_usadas?: number
+          teste_ate?: string | null
+          usa_b2b?: boolean
+          user_id?: string
+        }
+        Relationships: []
+      }
       cloudflare_config: {
         Row: {
           account_id: string | null
@@ -13097,6 +13136,32 @@ export type Database = {
           ultima_paga_numero: number
           ultima_pendente_data: string
         }[]
+      }
+      admin_definir_cliente_usa: {
+        Args: {
+          _dias_extra?: number
+          _teste: boolean
+          _usa_b2b: boolean
+          _user_id: string
+        }
+        Returns: {
+          atualizado_em: string
+          criado_em: string
+          ia_ativa: boolean
+          idioma: string
+          limite_respostas: number
+          prompt_ia: string
+          respostas_usadas: number
+          teste_ate: string | null
+          usa_b2b: boolean
+          user_id: string
+        }
+        SetofOptions: {
+          from: "*"
+          to: "cliente_usa_config"
+          isOneToOne: true
+          isSetofReturn: false
+        }
       }
       alterar_credor_acordo: {
         Args: { p_acordo_id: string; p_novo_credor: string }
