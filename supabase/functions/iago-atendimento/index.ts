@@ -275,7 +275,12 @@ Deno.serve(async (req) => {
     if (estado.optout) return json({ success: true, skipped: 'contato bloqueado' });
     // ===== Vendas B2B: parar de responder sem interesse, para robôs e sem progresso (cada envio custa) =====
     if (modoVendas) {
-      if (estado.etapa === 'vendas_encerrado') return json({ success: true, skipped: 'vendas encerrado' });
+      const motivoAnt = String((estado as any).contexto?.motivo_parada || '');
+      const encerradoAntes = estado.etapa === 'vendas_encerrado';
+      // Fora dos EUA, ou encerrado por recusa/sem progresso: continua calado.
+      if (encerradoAntes && (!mercadoUsa || (motivoAnt && motivoAnt !== 'robo'))) {
+        return json({ success: true, skipped: 'vendas encerrado' });
+      }
       const { data: ult } = await supabase.from('meta_whatsapp_mensagens')
         .select('direcao, conteudo, transcricao, criado_em, template_nome')
         .eq('instancia_id', (contato as any).instancia_id).eq('telefone', (contato as any).telefone || '')
@@ -294,7 +299,14 @@ Deno.serve(async (req) => {
       });
       // USA B2B: saudações automáticas de WhatsApp Business ("Thank you for contacting...")
       // são lidas depois pelo dono; o IAGO responde mesmo assim, limitado pelo teto de respostas.
-      if (parada === 'robo' && mercadoUsa) parada = null;
+      if (parada === 'robo' && mercadoUsa) parada = encerradoAntes ? 'robo' : null;
+      if (encerradoAntes) {
+        // USA: conversa fechada por resposta automática; humano escreveu => reabre.
+        if (parada === 'robo') return json({ success: true, skipped: 'vendas encerrado' });
+        await supabase.from('iago_conversa_estado').update({ etapa: 'vendas' }).eq('id', estado.id);
+        (estado as any).etapa = 'vendas';
+        console.log('[IAGO] vendas USA reaberto por mensagem humana', { contato_id });
+      }
       if (parada === 'intervalo') return json({ success: true, skipped: 'vendas: resposta recente' });
       // Cada envio custa: se a mensagem mais recente já é resposta do IAGO, não responde de novo.
       if (lista[0] && lista[0].direcao === 'saida' && !lista[0].template_nome) {
@@ -302,7 +314,8 @@ Deno.serve(async (req) => {
       }
       if (parada) {
         await supabase.from('iago_conversa_estado')
-          .update({ etapa: 'vendas_encerrado', followup_em: null, followup_feito: true }).eq('id', estado.id);
+          .update({ etapa: 'vendas_encerrado', followup_em: null, followup_feito: true,
+            contexto: { ...((estado as any).contexto || {}), motivo_parada: parada } }).eq('id', estado.id);
         console.log('[IAGO] vendas encerrado', { contato_id, parada });
         return json({ success: true, skipped: `vendas encerrado (${parada})` });
       }
