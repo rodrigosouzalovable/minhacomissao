@@ -1828,6 +1828,13 @@
       "when": 1795020672420,
       "tag": "0260_usa_instancias_proprias",
       "breakpoints": true
+    },
+    {
+      "idx": 261,
+      "version": "7",
+      "when": 1795020935011,
+      "tag": "0261_usa_etiquetas_proprias",
+      "breakpoints": true
     }
   ]
 }

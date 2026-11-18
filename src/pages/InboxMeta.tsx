@@ -467,7 +467,9 @@ export default function InboxMeta() {
 
   const fetchEtiquetas = useCallback(async () => {
     if (!user) return;
-    const { data } = currentFolderId && !buscaTelefoneGlobal
+    const { data } = isClienteUsa
+      ? await supabase.from('meta_whatsapp_etiquetas').select('id, nome, cor, ativa').eq('user_id', user.id).order('nome')
+      : currentFolderId && !buscaTelefoneGlobal
       ? await (supabase as any).rpc('meta_etiquetas_da_caixa', { _folder: currentFolderId })
       : await supabase.from('meta_whatsapp_etiquetas').select('id, nome, cor, ativa').order('nome');
     setEtiquetas(((data as any[]) ?? []).filter((e) => !isClienteUsa || !ehEtiquetaAtendente(e.nome)).map((e) => ({ ...e, ativa: e.ativa !== false })) as MetaEtiqueta[]);
@@ -1958,7 +1960,7 @@ export default function InboxMeta() {
                 </PopoverTrigger>
                 <PopoverContent className="w-64 p-2" align="end">
                   <div className="flex items-center justify-between mb-1.5">
-                    <span className="text-xs font-medium text-muted-foreground">Etiquetas</span>
+                    <span className="text-xs font-medium text-muted-foreground">{tr('Etiquetas')}</span>
                     {filtroEtiqueta.size > 0 && (
                       <button
                         onClick={() => setFiltroEtiqueta(new Set())}
@@ -2008,8 +2010,8 @@ export default function InboxMeta() {
                                 : await supabase.from('meta_whatsapp_etiquetas').update({ cor: editEtCor }).eq('id', et.id);
                               if (error) { toast({ title: 'Erro', description: error.message, variant: 'destructive' }); return; }
                               setEditEtId(null); fetchEtiquetas();
-                            }}>Salvar</Button>
-                            <Button size="sm" variant="ghost" className="h-6 text-xs" onClick={() => setEditEtId(null)}>Cancelar</Button>
+                            }}>{tr('Salvar')}</Button>
+                            <Button size="sm" variant="ghost" className="h-6 text-xs" onClick={() => setEditEtId(null)}>{tr('Cancelar')}</Button>
                           </div>
                         </div>
                       );
@@ -2046,13 +2048,13 @@ export default function InboxMeta() {
                     onClick={() => { setFiltroEtOpen(false); setEtiquetasConfigOpen(false); setEtiquetasOpen(true); }}
                     className="w-full flex items-center gap-2 text-xs px-2 py-1.5 mt-1 rounded border border-dashed border-border hover:bg-accent text-primary font-medium">
                     <Plus className="h-3.5 w-3.5" />
-                    Criar Etiqueta
+                    {tr('Criar Etiqueta')}
                   </button>
                   <button
                     onClick={() => { setFiltroEtOpen(false); setEtiquetasOpen(false); setEtiquetasConfigOpen(true); }}
                     className="w-full flex items-center gap-2 text-xs px-2 py-1.5 mt-1 rounded border border-border hover:bg-accent font-medium">
                     <Settings2 className="h-3.5 w-3.5" />
-                    Configuração de etiquetas
+                    {tr('Configuração de etiquetas')}
                   </button>
                 </PopoverContent>
 

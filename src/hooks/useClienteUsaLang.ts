@@ -28,6 +28,11 @@ const DIC: Record<string, { en: string; es: string }> = {
   'Oficial': { en: 'Official', es: 'Oficial' },
   'Selecione uma conversa': { en: 'Select a conversation', es: 'Selecciona una conversación' },
   'Digite uma mensagem...': { en: 'Type a message...', es: 'Escribe un mensaje...' },
+  'Etiquetas': { en: 'Labels', es: 'Etiquetas' },
+  'Criar Etiqueta': { en: 'Create label', es: 'Crear etiqueta' },
+  'Configuração de etiquetas': { en: 'Label settings', es: 'Configurar etiquetas' },
+  'Salvar': { en: 'Save', es: 'Guardar' },
+  'Cancelar': { en: 'Cancel', es: 'Cancelar' },
 };
 
 /** Idioma da interface para clientes USA B2B; null para a equipe (fica em português). */

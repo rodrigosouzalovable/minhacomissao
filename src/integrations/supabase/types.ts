@@ -14272,6 +14272,7 @@ export type Database = {
         Returns: boolean
       }
       is_admin_user: { Args: { uid: string }; Returns: boolean }
+      is_cliente_usa: { Args: { _uid: string }; Returns: boolean }
       is_consultoria_admin: { Args: { _uid: string }; Returns: boolean }
       is_consultoria_aluno: { Args: { _uid: string }; Returns: boolean }
       is_instancia_parceiro: { Args: { _instancia: string }; Returns: boolean }
