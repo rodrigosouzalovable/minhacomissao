@@ -1,3 +1,4 @@
+import { useClienteUsaLang } from '@/hooks/useClienteUsaLang';
 import { cachedFetch } from "@/lib/rpcCache";
 import { ReactNode, useState, useEffect, useCallback, useRef } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
@@ -164,6 +165,7 @@ function applyCustomOrder(items: NavItem[], savedOrder: string[] | null): NavIte
 }
 
 export function AppLayout({ children }: AppLayoutProps) {
+  const { tr } = useClienteUsaLang();
   const { user, signOut } = useAuth();
   const { isAdmin, isGestor } = useUserRole();
   const { abasPermitidas, acordosCompartilhados, veCampanhas } = useUserPermissions();
@@ -460,7 +462,7 @@ export function AppLayout({ children }: AppLayoutProps) {
                       key={item.href}
                       id={item.href}
                       href={item.href}
-                      label={item.label}
+                      label={tr(item.label)}
                       icon={item.icon}
                       isActive={location.pathname === item.href}
                       onClick={() => setMobileMenuOpen(false)}
@@ -492,7 +494,7 @@ export function AppLayout({ children }: AppLayoutProps) {
               onClick={handleSignOut}
             >
               <LogOut className="h-5 w-5" />
-              <span>Sair</span>
+              <span>{tr('Sair')}</span>
             </Button>
           </div>
         </div>

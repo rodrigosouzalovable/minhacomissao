@@ -1,3 +1,4 @@
+import { useClienteUsaLang } from '@/hooks/useClienteUsaLang';
 import { cachedFetch } from "@/lib/rpcCache";
 import { RefreshCw, Languages } from 'lucide-react';
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
@@ -151,6 +152,7 @@ function formatContatoTime(ts: string | null) {
 }
 
 export default function InboxMeta() {
+  const { tr } = useClienteUsaLang();
   const { user } = useAuth();
   const { isAdmin, loading: roleLoading, refetch: refetchRole } = useUserRole();
   const [caixasCarregando, setCaixasCarregando] = useState(false);
@@ -1906,15 +1908,15 @@ export default function InboxMeta() {
                 title={filtrosRecolhidos ? 'Mostrar filtros e caixas' : 'Minimizar filtros e caixas'}
               >
                 {filtrosRecolhidos ? <ChevronDown className="h-3 w-3" /> : <ChevronUp className="h-3 w-3" />}
-                {filtrosRecolhidos ? 'Mostrar filtros' : 'Minimizar filtros'}
+                {tr(filtrosRecolhidos ? 'Mostrar filtros' : 'Minimizar filtros')}
               </button>
             </div>
             {!filtrosRecolhidos && (
             <>
             <div className="flex items-center gap-2">
               <ShieldCheck className="h-4 w-4 text-emerald-500" />
-              <h2 className="text-sm font-semibold flex-1">Inbox API Oficial Meta</h2>
-              <Badge variant="outline" className="text-[10px] border-emerald-500/40 text-emerald-500">Oficial</Badge>
+              <h2 className="text-sm font-semibold flex-1">{tr('Inbox API Oficial Meta')}</h2>
+              <Badge variant="outline" className="text-[10px] border-emerald-500/40 text-emerald-500">{tr('Oficial')}</Badge>
               <NotificacoesCpfBell />
                {isAdmin && <NaoClienteBell />}
               <Button size="icon" variant="ghost" className="h-8 w-8" onClick={toggleTema} title={tema === 'dark' ? 'Modo claro' : 'Modo escuro'}>
@@ -1927,7 +1929,7 @@ export default function InboxMeta() {
             <Select value={filtroInstancia} onValueChange={setFiltroInstancia}>
               <SelectTrigger className="h-8 text-xs"><SelectValue placeholder="Número Meta" /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="todas">Todos ({instancias.length})</SelectItem>
+                <SelectItem value="todas">{tr('Todos')} ({instancias.length})</SelectItem>
                 {instancias.map(i => (
                   <SelectItem key={i.id} value={i.id}>{i.nome || i.display_phone || i.id.slice(0, 8)}</SelectItem>
                 ))}
@@ -1936,7 +1938,7 @@ export default function InboxMeta() {
             <div className="flex gap-1.5">
               <div className="relative flex-1">
                 <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
-                <Input value={busca} onChange={e => { contatosRequestRef.current += 1; setErroBuscaTelefone(false); setBusca(e.target.value); }} placeholder="Buscar por nome ou telefone..."
+                <Input value={busca} onChange={e => { contatosRequestRef.current += 1; setErroBuscaTelefone(false); setBusca(e.target.value); }} placeholder={tr('Buscar por nome ou telefone...')}
                   className="pl-7 h-8 text-xs" />
               </div>
               <Popover open={filtroEtOpen} onOpenChange={setFiltroEtOpen}>
@@ -2119,22 +2121,22 @@ export default function InboxMeta() {
             <div className="flex gap-1 bg-muted/40 p-0.5 rounded">
               <button onClick={() => setAbaAtiva('conversas')}
                 className={cn('flex-1 text-xs py-1 rounded transition', abaAtiva === 'conversas' ? 'bg-background shadow-sm' : 'text-muted-foreground')}>
-                Conversas
+                {tr('Conversas')}
               </button>
               <button onClick={() => setAbaAtiva('arquivados')}
                 className={cn('flex-1 text-xs py-1 rounded transition', abaAtiva === 'arquivados' ? 'bg-background shadow-sm' : 'text-muted-foreground')}>
-                Arquivados
+                {tr('Arquivados')}
               </button>
             </div>
             {/* Filtro leitura */}
             <div className="flex gap-1 bg-muted/40 p-0.5 rounded">
               <button onClick={() => setFiltroLeitura('todas')}
                 className={cn('flex-1 text-xs py-1 rounded transition', filtroLeitura === 'todas' ? 'bg-background shadow-sm' : 'text-muted-foreground')}>
-                Todas
+                {tr('Todas')}
               </button>
               <button onClick={() => setFiltroLeitura('nao_lidas')}
                 className={cn('flex-1 text-xs py-1 rounded transition', filtroLeitura === 'nao_lidas' ? 'bg-background shadow-sm' : 'text-muted-foreground')}>
-                Não lidas
+                {tr('Não lidas')}
               </button>
               {separarCampanhas && (
                 <button onClick={() => setFiltroLeitura('campanha')}
@@ -2153,7 +2155,7 @@ export default function InboxMeta() {
                 onClick={() => setModoMeusClientes(v => !v)}
                 title="Todas as conversas com a minha etiqueta de atendente"
               >
-                <Users className="h-3.5 w-3.5 mr-1" /> Meus Clientes
+                <Users className="h-3.5 w-3.5 mr-1" /> {tr('Meus Clientes')}
               </Button>
               {modoMeusClientes && (
                 <div className="space-y-1.5 rounded border border-dashed p-2">
@@ -2362,7 +2364,7 @@ export default function InboxMeta() {
 
               {!podeVerPadrao && foldersVisiveis.length === 0 && (
                 <span className="text-[11px] text-muted-foreground">
-                  Sem caixa de mensagens atribuída — fale com o administrador.
+                  {tr('Sem caixa de mensagens atribuída — fale com o administrador.')}
                 </span>
               )}
 
@@ -2451,7 +2453,7 @@ export default function InboxMeta() {
                 </div>
               ) : contatosFiltrados.length === 0 ? (
               <div className="p-6 text-center text-xs text-muted-foreground">
-                {buscaTelefoneGlobal ? 'Nenhuma conversa encontrada.' : abaAtiva === 'arquivados' ? 'Nenhuma conversa arquivada.' : 'Nenhuma conversa.'}
+                {tr(buscaTelefoneGlobal ? 'Nenhuma conversa encontrada.' : abaAtiva === 'arquivados' ? 'Nenhuma conversa arquivada.' : 'Nenhuma conversa.')}
               </div>
             ) : contatosFiltrados.map(c => {
               const inst = instancias.find(i => i.id === c.instancia_id);
@@ -3198,7 +3200,7 @@ export default function InboxMeta() {
                       ref={composerRef}
                       disabled={!janelaInfo.aberta}
                       enviando={enviando}
-                      placeholder={janelaInfo.aberta ? 'Digite uma mensagem...' : '🔒 Janela 24h fechada — envie template UTILITY para reabrir'}
+                      placeholder={janelaInfo.aberta ? tr('Digite uma mensagem...') : '🔒 Janela 24h fechada — envie template UTILITY para reabrir'}
                       onSend={(t) => enviar(t)}
                       onPaste={onPaste}
                       onEscape={() => respondendo && setRespondendo(null)}

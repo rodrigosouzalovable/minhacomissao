@@ -51,7 +51,7 @@ export default function ClienteUsa() {
   const [prompt, setPrompt] = useState('');
   const [idioma, setIdioma] = useState('auto');
   const [iaAtiva, setIaAtiva] = useState(false);
-  useEffect(() => { if (cfg) { setPrompt(cfg.prompt_ia); setIdioma(cfg.idioma); setIaAtiva(cfg.ia_ativa); } }, [cfg]);
+  useEffect(() => { if (cfg) { setPrompt(cfg.prompt_ia); setIdioma(cfg.idioma); setIaAtiva(cfg.ia_ativa); if (cfg.idioma_interface) { setLang(cfg.idioma_interface as Lang); localStorage.setItem('cliente-usa-lang', cfg.idioma_interface); } } }, [cfg]);
 
   // WhatsApp
   const [wa, setWa] = useState<{ connected: boolean; phone?: string | null; exists: boolean } | null>(null);
@@ -121,7 +121,7 @@ export default function ClienteUsa() {
     setChat([...novo, { role: 'assistant', content: data.resposta }]);
   };
 
-  const trocarLang = (l: Lang) => { setLang(l); localStorage.setItem('cliente-usa-lang', l); };
+  const trocarLang = (l: Lang) => { setLang(l); localStorage.setItem('cliente-usa-lang', l); setIdioma(l); if (user) supabase.from('cliente_usa_config').update({ idioma_interface: l, idioma: l }).eq('user_id', user.id).then(() => qc.invalidateQueries({ queryKey: ['cliente-usa-lang', user.id] })); };
   const expirado = !!cfg?.teste_ate && new Date(cfg.teste_ate).getTime() < Date.now();
   const passos = [!!wa?.connected, !!cfg?.prompt_ia?.trim(), chat.length > 1];
 

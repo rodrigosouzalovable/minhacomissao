@@ -1905,6 +1905,7 @@ export type Database = {
           criado_em: string
           ia_ativa: boolean
           idioma: string
+          idioma_interface: string
           limite_respostas: number
           prompt_ia: string
           respostas_usadas: number
@@ -1917,6 +1918,7 @@ export type Database = {
           criado_em?: string
           ia_ativa?: boolean
           idioma?: string
+          idioma_interface?: string
           limite_respostas?: number
           prompt_ia?: string
           respostas_usadas?: number
@@ -1929,6 +1931,7 @@ export type Database = {
           criado_em?: string
           ia_ativa?: boolean
           idioma?: string
+          idioma_interface?: string
           limite_respostas?: number
           prompt_ia?: string
           respostas_usadas?: number
@@ -13149,6 +13152,7 @@ export type Database = {
           criado_em: string
           ia_ativa: boolean
           idioma: string
+          idioma_interface: string
           limite_respostas: number
           prompt_ia: string
           respostas_usadas: number
@@ -13978,6 +13982,10 @@ export type Database = {
           p_template_mestre_id: string
         }
         Returns: undefined
+      }
+      garantir_caixa_cliente_usa: {
+        Args: { _user_id: string }
+        Returns: string
       }
       get_acordo_status_flags: {
         Args: { p_acordo_ids: string[] }
