@@ -1,3 +1,4 @@
+import { ehEtiquetaAtendente } from '@/lib/etiquetaAtendente';
 import { useClienteUsaLang } from '@/hooks/useClienteUsaLang';
 import { cachedFetch } from "@/lib/rpcCache";
 import { RefreshCw, Languages } from 'lucide-react';
@@ -152,7 +153,8 @@ function formatContatoTime(ts: string | null) {
 }
 
 export default function InboxMeta() {
-  const { tr } = useClienteUsaLang();
+  const { tr, lang: usaLang } = useClienteUsaLang();
+  const isClienteUsa = usaLang !== null;
   const { user } = useAuth();
   const { isAdmin, loading: roleLoading, refetch: refetchRole } = useUserRole();
   const [caixasCarregando, setCaixasCarregando] = useState(false);
@@ -459,17 +461,17 @@ export default function InboxMeta() {
     if (!user) return;
     (async () => {
       const { data } = await cachedFetch(`meta-envio-instancias:${user?.id}`, 120_000, async () => { const r = await (supabase as any).rpc('get_meta_whatsapp_active_instances_for_sending'); if (r.error) throw r.error; return r; }).catch((e: any) => ({ data: null, error: e }));
-      setInstancias((data as MetaInstance[]) ?? []);
+      setInstancias(((data as MetaInstance[]) ?? []).filter((i: any) => !isClienteUsa || !i.user_id || i.user_id === user.id));
     })();
-  }, [user]);
+  }, [user, isClienteUsa]);
 
   const fetchEtiquetas = useCallback(async () => {
     if (!user) return;
     const { data } = currentFolderId && !buscaTelefoneGlobal
       ? await (supabase as any).rpc('meta_etiquetas_da_caixa', { _folder: currentFolderId })
       : await supabase.from('meta_whatsapp_etiquetas').select('id, nome, cor, ativa').order('nome');
-    setEtiquetas(((data as any[]) ?? []).map((e) => ({ ...e, ativa: e.ativa !== false })) as MetaEtiqueta[]);
-  }, [user, currentFolderId, buscaTelefoneGlobal]);
+    setEtiquetas(((data as any[]) ?? []).filter((e) => !isClienteUsa || !ehEtiquetaAtendente(e.nome)).map((e) => ({ ...e, ativa: e.ativa !== false })) as MetaEtiqueta[]);
+  }, [user, currentFolderId, buscaTelefoneGlobal, isClienteUsa]);
 
   const [etiquetasBloqueadas, setEtiquetasBloqueadas] = useState<Record<string, Set<string>>>({});
   const fetchContatosNaoCliente = useCallback(async (contatoIds?: string[]) => {
@@ -1917,7 +1919,7 @@ export default function InboxMeta() {
               <ShieldCheck className="h-4 w-4 text-emerald-500" />
               <h2 className="text-sm font-semibold flex-1">{tr('Inbox API Oficial Meta')}</h2>
               <Badge variant="outline" className="text-[10px] border-emerald-500/40 text-emerald-500">{tr('Oficial')}</Badge>
-              <NotificacoesCpfBell />
+              {!isClienteUsa && <NotificacoesCpfBell />}
                {isAdmin && <NaoClienteBell />}
               <Button size="icon" variant="ghost" className="h-8 w-8" onClick={toggleTema} title={tema === 'dark' ? 'Modo claro' : 'Modo escuro'}>
                 {tema === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
@@ -2148,7 +2150,7 @@ export default function InboxMeta() {
             </div>
             {/* Meus Clientes */}
             <div className="space-y-1.5">
-              <Button
+              {!isClienteUsa && <Button
                 variant={modoMeusClientes ? 'default' : 'outline'}
                 size="sm"
                 className="w-full h-8 text-xs"
@@ -2156,7 +2158,7 @@ export default function InboxMeta() {
                 title="Todas as conversas com a minha etiqueta de atendente"
               >
                 <Users className="h-3.5 w-3.5 mr-1" /> {tr('Meus Clientes')}
-              </Button>
+              </Button>}
               {modoMeusClientes && (
                 <div className="space-y-1.5 rounded border border-dashed p-2">
                   {!minhaEtiquetaId && (

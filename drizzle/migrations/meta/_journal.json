@@ -1821,6 +1821,13 @@
       "when": 1795020118801,
       "tag": "0259_cliente_usa_idioma_caixa",
       "breakpoints": true
+    },
+    {
+      "idx": 260,
+      "version": "7",
+      "when": 1795020672420,
+      "tag": "0260_usa_instancias_proprias",
+      "breakpoints": true
     }
   ]
 }
