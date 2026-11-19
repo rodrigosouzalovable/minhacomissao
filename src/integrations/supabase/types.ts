@@ -2185,6 +2185,42 @@ export type Database = {
         }
         Relationships: []
       }
+      cobranca_b2b_leads: {
+        Row: {
+          cidade: string | null
+          created_at: string
+          enviado_em: string | null
+          id: string
+          job_id: string | null
+          nicho: string | null
+          nome: string | null
+          place_id: string | null
+          telefone: string
+        }
+        Insert: {
+          cidade?: string | null
+          created_at?: string
+          enviado_em?: string | null
+          id?: string
+          job_id?: string | null
+          nicho?: string | null
+          nome?: string | null
+          place_id?: string | null
+          telefone: string
+        }
+        Update: {
+          cidade?: string | null
+          created_at?: string
+          enviado_em?: string | null
+          id?: string
+          job_id?: string | null
+          nicho?: string | null
+          nome?: string | null
+          place_id?: string | null
+          telefone?: string
+        }
+        Relationships: []
+      }
       comite_carteira_nm_item: {
         Row: {
           atraso_dias: number

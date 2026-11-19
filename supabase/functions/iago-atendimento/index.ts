@@ -1,5 +1,6 @@
 import { decidirParada } from '../_shared/vendas-encerramento.ts';
 import { FOLDER_USA_B2B_INBOX, promptVendasUsa, FALLBACK_USA, FALLBACK_USA_EN, pareceIngles } from '../_shared/vendas-usa.ts';
+import { FOLDER_COBRANCA_B2B_INBOX, promptVendasCobranca, FALLBACK_COBRANCA } from '../_shared/vendas-cobranca.ts';
 import { notificarAdmin } from '../_shared/notificar-admin.ts';
 // IAGO — atendente da caixa PADRÃO por rodízio e de toda entrada UAZAPI da AQUECIMENTO.
 // Na PADRÃO pode escalar; na AQUECIMENTO responde curto, sem humano e sem follow-up.
@@ -51,6 +52,7 @@ Deno.serve(async (req) => {
   let modoAquecimento = false;
   let modoVendas = false;
   let mercadoUsa = false;
+  let mercadoCobranca = false;
   let modoCaixaPadrao = false;
   const etiquetarAguardandoHumano = async (sb: any, contatoId: string) => {
     if (modoAquecimento) {
@@ -113,7 +115,8 @@ Deno.serve(async (req) => {
     }
 
     mercadoUsa = (contato as any).folder_id === FOLDER_USA_B2B_INBOX;
-    modoVendas = (contato as any).folder_id === FOLDER_BLACK_FRIDAY_INBOX || mercadoUsa;
+    mercadoCobranca = (contato as any).folder_id === FOLDER_COBRANCA_B2B_INBOX;
+    modoVendas = (contato as any).folder_id === FOLDER_BLACK_FRIDAY_INBOX || mercadoUsa || mercadoCobranca;
     // Leads do Google Maps usados no aquecimento não são atendidos pelo IAGO (exceto na BLACK FRIDAY).
     if (!modoVendas && String((contato as any).origem_aquecimento || '') === 'lead_google_maps') {
       return json({ success: false, skipped: 'lead de aquecimento (Google Maps)' });
@@ -1137,7 +1140,7 @@ Deno.serve(async (req) => {
       cpfIdentificado: !!cpf, cpfPorTelefone, multiplosCandidatos,
       etapaNegociacao: etapaAnterior, escolhaAnterior, imagemCtx,
       qualificacoes: await quals(),
-      propostaPrevia, respostaAutomatica, precisaPerguntarNome, modoAquecimento, modoCaixaPadrao, modoVendas, mercadoUsa,
+      propostaPrevia, respostaAutomatica, precisaPerguntarNome, modoAquecimento, modoCaixaPadrao, modoVendas, mercadoUsa, mercadoCobranca,
     });
 
     // ===== BLACK FRIDAY: avisa o admin no WhatsApp quando o lead demonstra interesse (1x por contato) =====
@@ -1145,10 +1148,10 @@ Deno.serve(async (req) => {
       try {
         const tel = String((contato as any).telefone || '');
         await notificarAdmin(supabase, {
-          tipo: mercadoUsa ? 'usa_b2b_interesse' : 'black_friday_interesse',
-          chaveIdempotencia: `${mercadoUsa ? 'usa' : 'bf'}_interesse_${contato_id}`,
+          tipo: mercadoCobranca ? 'cobranca_b2b_interesse' : mercadoUsa ? 'usa_b2b_interesse' : 'black_friday_interesse',
+          chaveIdempotencia: `${mercadoCobranca ? 'cob' : mercadoUsa ? 'usa' : 'bf'}_interesse_${contato_id}`,
           umaVezPorChave: true,
-          mensagem: `🎯 LEAD INTERESSADO — ${mercadoUsa ? 'USA B2B 🇺🇸' : 'BLACK FRIDAY'}\n\n🏢 ${nomeCliente || 'Empresa'}\n📱 ${tel}\n💬 "${String(textoAtual || '').slice(0, 300)}"\n📌 ${(resultado as any).interesse_resumo || ''}\n\n👉 Abra o Inbox na caixa ${mercadoUsa ? 'USA B2B' : 'BLACK FRIDAY'} e assuma a conversa.`,
+          mensagem: `🎯 LEAD INTERESSADO — ${mercadoCobranca ? 'B2B COBRANÇA' : mercadoUsa ? 'USA B2B 🇺🇸' : 'BLACK FRIDAY'}\n\n🏢 ${nomeCliente || 'Empresa'}\n📱 ${tel}\n💬 "${String(textoAtual || '').slice(0, 300)}"\n📌 ${(resultado as any).interesse_resumo || ''}\n\n👉 Abra o Inbox na caixa ${mercadoCobranca ? 'B2B COBRANÇA' : mercadoUsa ? 'USA B2B' : 'BLACK FRIDAY'} e assuma a conversa.`,
         });
       } catch (e: any) { console.error('[IAGO] aviso interesse BF falhou', e?.message || e); }
     }
@@ -1497,6 +1500,7 @@ async function gerarResposta(args: {
   modoAquecimento?: boolean;
   modoVendas?: boolean;
   mercadoUsa?: boolean;
+  mercadoCobranca?: boolean;
   modoCaixaPadrao?: boolean;
 }): Promise<{
   mensagens: string[]; escalar: boolean; motivo: string;
@@ -1507,7 +1511,7 @@ async function gerarResposta(args: {
   const {
     cfg, itens, historico, texto, proposta, nomeCliente, primeiroToque, credorCaixa, credorAmbiguo,
     cpfIdentificado, cpfPorTelefone, multiplosCandidatos, etapaNegociacao, escolhaAnterior,
-    imagemCtx, qualificacoes, propostaPrevia, respostaAutomatica, precisaPerguntarNome, modoAquecimento, modoCaixaPadrao, modoVendas, mercadoUsa,
+    imagemCtx, qualificacoes, propostaPrevia, respostaAutomatica, precisaPerguntarNome, modoAquecimento, modoCaixaPadrao, modoVendas, mercadoUsa, mercadoCobranca,
   } = args;
 
   const textoNormalizado = String(texto || '')
@@ -1521,7 +1525,7 @@ async function gerarResposta(args: {
     const conversa = historico.length
       ? historico.map((m) => `${m.direcao === 'entrada' ? 'EMPRESA' : 'VOCÊ'}: ${String(m.conteudo || '').slice(0, 500)}`).join('\n')
       : '(primeira resposta)';
-    const systemVendas = mercadoUsa ? promptVendasUsa(cfg.persona_nome || 'Iago') : [
+    const systemVendas = mercadoCobranca ? promptVendasCobranca(cfg.persona_nome || 'Iago') : mercadoUsa ? promptVendasUsa(cfg.persona_nome || 'Iago') : [
       `Você é ${cfg.persona_nome || 'Iago'}, consultor comercial da Souza Ribeiro, falando por WhatsApp oficial com donos/gestores de comércios de Goiânia.`,
       'CONTEXTO: enviamos antes "Só passando para confirmar se você recebeu nossa mensagem anterior". A empresa respondeu por curiosidade. NÃO é cobrança: nunca fale de dívida, CPF, boleto ou credor.',
       'O QUE VENDEMOS: campanha de Black Friday e Natal por WhatsApp OFICIAL (API da Meta): disparo para a base de clientes da empresa (antigos e atuais), mensagem com botões, entrega oficial sem risco de bloqueio do número deles, relatório de entregas e respostas direto no WhatsApp da empresa.',
@@ -1544,7 +1548,7 @@ async function gerarResposta(args: {
     } catch (e: any) {
       console.error('[IAGO] falha no modo vendas', e?.message || e);
     }
-    return { mensagens: [mercadoUsa ? (pareceIngles(texto) ? FALLBACK_USA_EN : FALLBACK_USA) : 'Era sobre uma ação de vendas de Black Friday e Natal pelo WhatsApp oficial para empresas de Goiânia. Vocês costumam falar com seus clientes pelo WhatsApp?'], escalar: false, motivo: 'fallback vendas' };
+    return { mensagens: [mercadoCobranca ? FALLBACK_COBRANCA : mercadoUsa ? (pareceIngles(texto) ? FALLBACK_USA_EN : FALLBACK_USA) : 'Era sobre uma ação de vendas de Black Friday e Natal pelo WhatsApp oficial para empresas de Goiânia. Vocês costumam falar com seus clientes pelo WhatsApp?'], escalar: false, motivo: 'fallback vendas' };
   }
 
   if (modoAquecimento) {
