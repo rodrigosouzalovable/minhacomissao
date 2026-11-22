@@ -796,7 +796,11 @@ export async function handleSendWhatsAppMeta(req: Request): Promise<Response> {
       }
     }
 
-    // Bloqueio de domingo/horário desativado: envios liberados em qualquer dia/horário.
+    // Domingo (BRT): campanhas/envios proativos bloqueados; Inbox manual, testes e confirmações seguem.
+    if (new Date(Date.now() - 3 * 3600_000).getUTCDay() === 0 && !isTeste && manual_inbox !== true && proativo !== false) {
+      return new Response(JSON.stringify({ success: false, blocked: 'domingo', error: 'Envios bloqueados aos domingos' }),
+        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
+    }
 
 
     // Reset diário

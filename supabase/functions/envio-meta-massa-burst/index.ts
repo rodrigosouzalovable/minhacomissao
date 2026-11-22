@@ -353,6 +353,15 @@ Deno.serve(async (req) => {
       });
     }
 
+    // Domingo (BRT): não dispara; o tick reabre os workers na segunda às 08h.
+    if (new Date(Date.now() - 3 * 3600_000).getUTCDay() === 0) {
+      await supabase.from('envio_meta_job_item').update({ status: 'pendente' })
+        .eq('job_id', jobId).eq('instancia_id', instanciaId).eq('status', 'processando');
+      return new Response(JSON.stringify({ success: false, blocked: 'domingo' }), {
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      });
+    }
+
     const { data: job } = await supabase.from('envio_meta_job').select('*').eq('id', jobId).maybeSingle();
     if (!job) {
       return new Response(JSON.stringify({ success: false, error: 'job não encontrado' }), {
