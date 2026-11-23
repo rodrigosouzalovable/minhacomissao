@@ -5,6 +5,7 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { corsHeaders } from 'npm:@supabase/supabase-js@2/cors';
 import { requireCaller } from '../_shared/auth-guard.ts';
 import { chavePodeBuscar, listarChavesGoogleMaps, marcarChaveIndisponivelNoMes } from '../_shared/google-maps-keys.ts';
+import { semInstanciasSoLembrete } from '../_shared/instancias-so-lembrete.ts';
 
 const DONO = 'ee649720-b8ce-47a2-859e-100a3a9ae6bb';
 const PASTA_USA = '7b3e9a10-4c2d-4f8e-9a61-0d5e2c8b1a47';
@@ -107,7 +108,7 @@ Deno.serve(async (req) => {
   const { data: inst } = await db.from('meta_whatsapp_instances').select('id')
     .eq('user_id', DONO).eq('ativo', true).eq('saude_status', 'CONNECTED').eq('saude_quality', 'GREEN')
     .eq('estado_pool', 'ativo').eq('instancia_teste_aquecimento', false);
-  const ids = (inst || []).map((i: any) => i.id);
+  const ids = semInstanciasSoLembrete((inst || []).map((i: any) => i.id));
   const { data: tpls } = await db.from('meta_whatsapp_templates').select('id,instancia_id')
     .in('instancia_id', ids.length ? ids : ['00000000-0000-0000-0000-000000000000'])
     .eq('nome_template', TEMPLATE).eq('status', 'approved').ilike('categoria', 'utility');
