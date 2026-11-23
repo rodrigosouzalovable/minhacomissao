@@ -686,7 +686,7 @@ function LegacyConsultaResultado() {
                               </div>
 
                               <div>
-                                <Label className="text-xs font-semibold" style={{ color: '#ffffffaa' }}>Valor de entrada (opcional — mínimo {formatCurrency(VALOR_MINIMO_ENTRADA)})</Label>
+                                <Label className="text-xs font-semibold" style={{ color: '#ffffffaa' }}>Valor de entrada (opcional)</Label>
                                 <Input
                                   type="number"
                                   min={0}
@@ -702,12 +702,12 @@ function LegacyConsultaResultado() {
                                   <p className="text-xs mt-1" style={{ color: '#ff6b6b' }}>Entrada não pode ser maior que o valor com desconto</p>
                                 )}
                                 {negociacao.entrada > 0 && negociacao.entrada < VALOR_MINIMO_ENTRADA && (
-                                  <p className="text-xs mt-1" style={{ color: '#ff6b6b' }}>A entrada mínima é de {formatCurrency(VALOR_MINIMO_ENTRADA)}</p>
+                                  <p className="text-xs mt-1" style={{ color: '#ff6b6b' }}>Valor de entrada inválido</p>
                                 )}
                               </div>
 
                               <div>
-                                <Label className="text-xs font-semibold" style={{ color: '#ffffffaa' }}>Número de parcelas (mínimo {formatCurrency(VALOR_MINIMO_PARCELA)} por parcela)</Label>
+                                <Label className="text-xs font-semibold" style={{ color: '#ffffffaa' }}>Número de parcelas</Label>
                                 <Select
                                   value={String(negociacao.parcelas)}
                                   onValueChange={(v) => updateNegociacao({ parcelas: parseInt(v) })}

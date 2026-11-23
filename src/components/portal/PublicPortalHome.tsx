@@ -11,7 +11,7 @@ import { validPortalCpf } from '@/lib/portalNegotiation';
 
 const faqsPrincipal = [
   ['Quais dívidas posso consultar?', 'O portal reúne consultas de Novo Mundo e UME atendidas pela Souza e Ribeiro Advogados. As informações e condições aparecem separadas por credor.'],
-  ['As condições são iguais para todos os credores?', 'Não. Novo Mundo mantém as condições da sua carteira. Para UME, quando o principal sem juros estiver confirmado, o pagamento à vista usa esse valor e o parcelamento acrescenta 10%, com até 18 parcelas de no mínimo R$ 100.'],
+  ['As condições são iguais para todos os credores?', 'Não. Novo Mundo mantém as condições da sua carteira. Para UME, quando o principal sem juros estiver confirmado, o pagamento à vista usa esse valor e o parcelamento acrescenta 10%, com até 18 parcelas.'],
   ['Tenho dívidas com mais de um credor. Como negociar?', 'Cada carteira aparece separadamente. Escolha o credor e a condição desejada. Sua mensagem para o atendimento identifica qual dívida você quer negociar.'],
   ['Já tenho um acordo. Ele aparece na consulta?', 'Os acordos disponíveis são apresentados na carteira correspondente, com suas parcelas e situação de pagamento. Para informações ou alterações, fale com a equipe pelo canal oficial.'],
   ['A consulta gera um acordo automaticamente?', 'Não. A simulação permite solicitar atendimento pelo WhatsApp. A equipe confirma as condições e orienta a formalização do acordo e a emissão do boleto.'],
@@ -20,7 +20,7 @@ const faqsPrincipal = [
 
 const faqsOdres = [
   ['Quais dívidas posso consultar?', 'Este portal é exclusivo para consultas da Odres Cred atendidas pela Souza e Ribeiro Advogados.'],
-  ['Quais são as condições?', 'Quando o principal sem juros estiver confirmado, o pagamento à vista usa esse valor e o parcelamento acrescenta 10%, com até 18 parcelas de no mínimo R$ 100.'],
+  ['Quais são as condições?', 'Quando o principal sem juros estiver confirmado, o pagamento à vista usa esse valor e o parcelamento acrescenta 10%, com até 18 parcelas.'],
   ['Já tenho um acordo. Ele aparece na consulta?', 'Sim. Os acordos disponíveis aparecem com suas parcelas e situação de pagamento. Para informações ou alterações, fale com a equipe pelo canal oficial.'],
   ['Não encontrei minha dívida. O que fazer?', 'Entre em contato pelo canal oficial. Se a consulta estiver temporariamente indisponível, o portal informa essa situação: indisponibilidade não significa ausência de dívida.'],
 ];
