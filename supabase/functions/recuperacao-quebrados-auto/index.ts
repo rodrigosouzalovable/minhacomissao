@@ -12,6 +12,10 @@ const TEMPLATE = "abertura_para_reagendamento_de_pagamento";
 const CREDOR: Record<string, string> = { ume_novo_mundo: "UME", odres_cred: "Odres Cred" };
 const PREV_TEMPLATE = "novo_lembrete_envio_boleto_variavel";
 const PREV_NOME = "Lembrete preventivo auto";
+const PREV_TEMPLATE_POR_CREDOR: Record<string, string> = {
+  UME: "segunda_via_pix_portal_ume",
+  "ODRES CRED": "segunda_via_pix_portal_odres",
+};
 
 const json = (p: unknown, status = 200) =>
   new Response(JSON.stringify(p), { status, headers: { ...corsHeaders, "Content-Type": "application/json" } });
@@ -293,23 +297,32 @@ async function lancarPreventivo(db: any, url: string, key: string, hoje: string,
     .eq("user_id", DONO).eq("ativo", true).eq("saude_status", "CONNECTED").eq("saude_quality", "GREEN")
     .eq("estado_pool", "ativo").eq("instancia_teste_aquecimento", false);
   const ids = (inst || []).map((i: any) => i.id);
-  const { data: tpls } = await db.from("meta_whatsapp_templates").select("id,instancia_id")
-    .in("instancia_id", ids.length ? ids : ["00000000-0000-0000-0000-000000000000"])
-    .eq("nome_template", PREV_TEMPLATE).eq("status", "approved").ilike("categoria", "utility");
-  const byInst: Record<string, string> = {};
-  for (const t of tpls || []) byInst[t.instancia_id] = t.id;
-  const instIds = Object.keys(byInst);
-  if (!instIds.length) return { success: false, clientes: clientes.length, error: "nenhum número GREEN com o modelo Utility" };
-
-  const resp = await fetch(`${url}/functions/v1/envio-meta-massa-iniciar`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}` },
-    body: JSON.stringify({
-      asUserId: DONO, template: { id: byInst[instIds[0]], nome_template: PREV_TEMPLATE },
-      instanciaIds: instIds, templateIdByInstance: byInst, clientes, minSec: 5, maxSec: 10,
-      nomeCampanha: `${PREV_NOME} ${hoje}`, validarNoEnvio: false,
-    }),
-  });
-  const out = await resp.json().catch(() => ({}));
-  return { success: resp.ok, clientes: clientes.length, numeros: instIds.length, resultado: out };
+  // Cada credor recebe o modelo do seu próprio portal (UME e Odres); Novo Mundo segue no modelo antigo.
+  const grupos: Record<string, any[]> = {};
+  for (const c of clientes) {
+    const tpl = PREV_TEMPLATE_POR_CREDOR[c.vars["2"]] || PREV_TEMPLATE;
+    (grupos[tpl] ||= []).push(c);
+  }
+  const resultados: any[] = [];
+  for (const [tplNome, lista] of Object.entries(grupos)) {
+    const { data: tpls } = await db.from("meta_whatsapp_templates").select("id,instancia_id")
+      .in("instancia_id", ids.length ? ids : ["00000000-0000-0000-0000-000000000000"])
+      .eq("nome_template", tplNome).eq("status", "approved").ilike("categoria", "utility");
+    const byInst: Record<string, string> = {};
+    for (const t of tpls || []) byInst[t.instancia_id] = t.id;
+    const instIds = Object.keys(byInst);
+    if (!instIds.length) { resultados.push({ template: tplNome, clientes: lista.length, error: "nenhum número GREEN com o modelo Utility" }); continue; }
+    const resp = await fetch(`${url}/functions/v1/envio-meta-massa-iniciar`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${key}` },
+      body: JSON.stringify({
+        asUserId: DONO, template: { id: byInst[instIds[0]], nome_template: tplNome },
+        instanciaIds: instIds, templateIdByInstance: byInst, clientes: lista, minSec: 5, maxSec: 10,
+        nomeCampanha: `${PREV_NOME} ${tplNome} ${hoje}`, validarNoEnvio: false,
+      }),
+    });
+    const out = await resp.json().catch(() => ({}));
+    resultados.push({ template: tplNome, ok: resp.ok, clientes: lista.length, numeros: instIds.length, job_id: out?.job_id, erro: out?.error });
+  }
+  return { success: resultados.every((r) => r.ok), clientes: clientes.length, resultados };
 }
