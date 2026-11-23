@@ -5,13 +5,14 @@ import { Link } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/hooks/useAuth';
 import { useUserRole } from '@/hooks/useUserRole';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useQueryClient, useIsFetching } from '@tanstack/react-query';
+import { toast } from 'sonner';
 import { AppLayout } from '@/components/layout/AppLayout';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { formatarMoeda, formatarData } from '@/lib/comissao';
-import { PlusCircle, FileText, DollarSign, Clock, CheckCircle, Target, Sparkles } from 'lucide-react';
+import { PlusCircle, FileText, DollarSign, Clock, CheckCircle, Target, Sparkles, RefreshCw } from 'lucide-react';
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { format, subMonths, startOfMonth, endOfDay, min } from 'date-fns';
 import { MetasMensal } from '@/components/MetasMensal';
@@ -45,6 +46,18 @@ export default function Dashboard() {
   const [definirMetasOpen, setDefinirMetasOpen] = useState(false);
   const [configMotivOpen, setConfigMotivOpen] = useState(false);
   const metaMes = useMetaMes();
+  const queryClient = useQueryClient();
+  const buscando = useIsFetching() > 0;
+  const [atualizando, setAtualizando] = useState(false);
+  const atualizar = async () => {
+    setAtualizando(true);
+    try {
+      await queryClient.refetchQueries({ type: 'active' });
+      toast.success(`Dados atualizados às ${format(new Date(), 'HH:mm:ss')}`);
+    } finally {
+      setAtualizando(false);
+    }
+  };
 
   const { data, isLoading } = useQuery({
     queryKey: ['dashboard', user?.id, isAdmin],
@@ -170,6 +183,10 @@ export default function Dashboard() {
         <div className="flex items-center justify-between">
           <h1 className="text-2xl font-bold text-foreground">Dashboard</h1>
           <div className="flex items-center gap-2">
+            <Button variant="outline" onClick={atualizar} disabled={atualizando}>
+              <RefreshCw className={`h-4 w-4 mr-2 ${atualizando || buscando ? 'animate-spin' : ''}`} />
+              Atualizar
+            </Button>
             {isAdmin && (
               <>
                 <Button variant="outline" onClick={() => setConfigMotivOpen(true)}>
