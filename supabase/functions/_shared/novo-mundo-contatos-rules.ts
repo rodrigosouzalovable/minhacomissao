@@ -1,7 +1,8 @@
 import { telefoneMeta } from './meta-destinatario.ts';
 import { RECUPERACAO_TETO_BRL } from './recuperacao-volume.ts';
 export const NOVO_MUNDO_ORIGEM = 'recuperacao_novo_mundo';
-export const NOVO_MUNDO_MAX = 5000;
+export const NOVO_MUNDO_MAX = 100000;
+export const NOVO_MUNDO_LOTE_MAX = 30000;
 export const NOVO_MUNDO_AVISO = 500;
 export const NOVO_MUNDO_TETO = RECUPERACAO_TETO_BRL;
 const ddds = new Set('11 12 13 14 15 16 17 18 19 21 22 24 27 28 31 32 33 34 35 37 38 41 42 43 44 45 46 47 48 49 51 53 54 55 61 62 63 64 65 66 67 68 69 71 73 74 75 77 79 81 82 83 84 85 86 87 88 89 91 92 93 94 95 96 97 98 99'.split(' '));
@@ -17,7 +18,7 @@ export function conferirContatosNovoMundo(rows: unknown[][]) {
   const first = rows[0] ?? [];
   const header = /^(telefone|celular|whatsapp)$/i.test(String(first[0] ?? '').trim()) && String(first[1] ?? '').trim() === '{{1}}' && String(first[2] ?? '').trim() === '{{2}}';
   const data = (header ? rows.slice(1) : rows).filter(r => r.some(v => v !== null && v !== undefined && String(v).trim() !== ''));
-  if (data.length > NOVO_MUNDO_MAX) throw new Error('Envie um arquivo com até 5.000 contatos, além do cabeçalho.');
+  if (data.length > NOVO_MUNDO_LOTE_MAX) throw new Error('Envie um arquivo com até 30.000 contatos, além do cabeçalho.');
   if (!data.length) throw new Error('A planilha não contém contatos.');
   let invalidos = 0, duplicados = 0;
   const coincidencias: { telefone: string; mantido: string; linha: number }[] = [];

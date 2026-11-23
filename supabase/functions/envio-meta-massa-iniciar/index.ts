@@ -203,9 +203,9 @@ Deno.serve(async (req) => {
           motivos.push(`${rotulo}: qualidade não confirmada na Meta${r.qualidade_leitura_erro ? ` — ${r.qualidade_leitura_erro}` : ''}`);
           continue;
         }
-        if (q !== 'GREEN') {
+        if (q !== 'GREEN' && q !== 'UNKNOWN' && q !== '') {
           badIds.add(id);
-          motivos.push(`${rotulo}: qualidade ${q || 'desconhecida'} — campanha exige GREEN`);
+          motivos.push(`${rotulo}: qualidade ${q} — campanha exige GREEN ou desconhecida`);
         }
       }
     }

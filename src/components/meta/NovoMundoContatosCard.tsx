@@ -35,13 +35,13 @@ export function NovoMundoContatosCard() {
     if (!file) return;
     setLendo(true); setConsentimento(false);
     try {
-      if (!/\.(xlsx|xls)$/i.test(file.name) || file.size > 10 * 1024 * 1024) throw new Error('Selecione um Excel de até 10 MB com no máximo 5.000 contatos.');
+      if (!/\.(xlsx|xls)$/i.test(file.name) || file.size > 20 * 1024 * 1024) throw new Error('Selecione um Excel de até 20 MB com no máximo 30.000 contatos.');
       const XLSX = await import('xlsx');
-      const workbook = XLSX.read(await file.arrayBuffer(), { type: 'array', sheetRows: 5003 });
+      const workbook = XLSX.read(await file.arrayBuffer(), { type: 'array', sheetRows: 30003 });
       const sheet = workbook.Sheets[workbook.SheetNames[0]];
       if (!sheet) throw new Error('Planilha vazia.');
       const fullRange = sheet['!fullref'] || sheet['!ref'];
-      if (fullRange && XLSX.utils.decode_range(fullRange).e.r >= 5001) throw new Error('Envie no máximo 5.000 contatos, além do cabeçalho. Divida a base em lotes.');
+      if (fullRange && XLSX.utils.decode_range(fullRange).e.r >= 30001) throw new Error('Envie no máximo 30.000 contatos, além do cabeçalho. Divida a base em lotes.');
       const checked = conferirContatosNovoMundo(XLSX.utils.sheet_to_json<unknown[]>(sheet, { header: 1, raw: true, defval: '' }));
       if (checked.conflitos.length) throw new Error(`${checked.conflitos.length} telefones repetidos com variáveis diferentes. Revise o arquivo.`);
       if (!checked.contatos.length) throw new Error('Nenhum contato válido no arquivo.');

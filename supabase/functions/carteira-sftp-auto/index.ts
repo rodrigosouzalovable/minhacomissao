@@ -90,9 +90,9 @@ Deno.serve(async (req) => {
   if (simular) return json({ success: true, simulado: true, resumo, amostra: clientes.slice(0, 5).map((c) => ({ ...c, telefone: `***${c.telefone.slice(-4)}`, cpf: undefined })) });
   if (!clientes.length) return json({ success: true, clientes: 0, resumo });
 
-  // Números GREEN do pool com os dois modelos Utility aprovados (nunca o modelo do outro credor).
+  // Números GREEN ou de qualidade desconhecida do pool com os dois modelos Utility aprovados (nunca o modelo do outro credor).
   const { data: inst } = await db.from('meta_whatsapp_instances').select('id')
-    .eq('user_id', DONO).eq('ativo', true).eq('saude_status', 'CONNECTED').eq('saude_quality', 'GREEN')
+    .eq('user_id', DONO).eq('ativo', true).eq('saude_status', 'CONNECTED').or('saude_quality.in.(GREEN,UNKNOWN),saude_quality.is.null')
     .eq('estado_pool', 'ativo').eq('instancia_teste_aquecimento', false);
   const ids = semInstanciasSoLembrete((inst || []).map((i: any) => i.id));
   const { data: tpls } = await db.from('meta_whatsapp_templates').select('id,instancia_id,nome_template')
@@ -104,7 +104,7 @@ Deno.serve(async (req) => {
     if (t.nome_template === TEMPLATES.odres_cred) por.odres_cred[t.instancia_id] = t.id;
   }
   const instIds = Object.keys(por.ume).filter((id) => por.odres_cred[id]);
-  if (!instIds.length) return json({ success: false, error: 'nenhum número GREEN com os dois modelos Utility', resumo }, 400);
+  if (!instIds.length) return json({ success: false, error: 'nenhum número GREEN/desconhecido com os dois modelos Utility', resumo }, 400);
 
   // Mesma caixa do Inbox usada na última campanha manual da carteira.
   const { data: ult } = await db.from('envio_meta_job').select('folder_id').eq('user_id', DONO)

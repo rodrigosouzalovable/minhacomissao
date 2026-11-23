@@ -216,8 +216,8 @@ export async function handlePickMetaInstance(req: Request): Promise<Response> {
           descartados.push(`${rotulo}: qualidade desatualizada (última leitura há ${Math.round(idadeH)}h)`);
           continue;
         }
-        if (qCamp !== 'GREEN') {
-          descartados.push(`${rotulo}: qualidade ${qCamp || 'desconhecida'} — campanha exige GREEN`);
+        if (qCamp !== 'GREEN' && qCamp !== 'UNKNOWN' && qCamp !== '') {
+          descartados.push(`${rotulo}: qualidade ${qCamp} — campanha exige GREEN ou desconhecida`);
           continue;
         }
       }
