@@ -1849,6 +1849,13 @@
       "when": 1795087490960,
       "tag": "0263_caixa_cobranca_b2b",
       "breakpoints": true
+    },
+    {
+      "idx": 264,
+      "version": "7",
+      "when": 1795441191897,
+      "tag": "0264_novo_acordo_dados_sftp",
+      "breakpoints": true
     }
   ]
 }

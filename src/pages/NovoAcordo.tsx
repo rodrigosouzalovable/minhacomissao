@@ -243,8 +243,23 @@ export default function NovoAcordo() {
 
     toast({
       title: 'Dados extraídos!',
-      description: 'Confira as parcelas e preencha telefone, dias de atraso e credor antes de salvar.',
+      description: 'Confira as parcelas e o credor antes de salvar. Telefone e dias de atraso vêm do arquivo SFTP quando disponíveis.',
     });
+
+    // Completa telefone (somente se houver um único) e dias de atraso pelo arquivo SFTP.
+    const cpfDoc = (documento.cliente_cpf || '').replace(/\D/g, '');
+    if (cpfDoc.length === 11) {
+      supabase.rpc('novo_acordo_dados_sftp' as any, { p_cpf: cpfDoc }).then(({ data }) => {
+        const d = data as any;
+        if (!d?.encontrado) return;
+        const tel = d.telefone ? String(d.telefone).replace(/\D/g, '').replace(/^55(?=\d{10,11}$)/, '') : '';
+        setForm(prev => ({ ...prev,
+          clienteTelefone: prev.clienteTelefone || (tel ? formatPhone(tel) : ''),
+          diasAtraso: prev.diasAtraso || (d.dias_atraso != null ? String(d.dias_atraso) : ''),
+        }));
+        if (d.qtd_telefones > 1) toast({ title: 'Cliente com mais de um telefone', description: 'Preencha manualmente o telefone correto.' });
+      });
+    }
   };
 
   // Função para calcular e preencher automaticamente os valores das parcelas

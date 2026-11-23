@@ -10811,6 +10811,8 @@ export type Database = {
           nome: string | null
           primeiro_lote: string | null
           telefone: string | null
+          telefones: string[] | null
+          telefones_lote: string | null
         }
         Insert: {
           atualizado_em?: string
@@ -10821,6 +10823,8 @@ export type Database = {
           nome?: string | null
           primeiro_lote?: string | null
           telefone?: string | null
+          telefones?: string[] | null
+          telefones_lote?: string | null
         }
         Update: {
           atualizado_em?: string
@@ -10831,6 +10835,8 @@ export type Database = {
           nome?: string | null
           primeiro_lote?: string | null
           telefone?: string | null
+          telefones?: string[] | null
+          telefones_lote?: string | null
         }
         Relationships: []
       }
@@ -14801,6 +14807,7 @@ export type Database = {
         Returns: Json
       }
       nome_cliente_por_cpf: { Args: { p_cpf: string }; Returns: string }
+      novo_acordo_dados_sftp: { Args: { p_cpf: string }; Returns: Json }
       owns_whatsapp_instance: { Args: { inst_id: string }; Returns: boolean }
       parceiro_tem_instancia: {
         Args: { _instancia: string; _uid: string }
