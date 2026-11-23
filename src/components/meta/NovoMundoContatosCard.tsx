@@ -7,7 +7,8 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Progress } from '@/components/ui/progress';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from '@/components/ui/dialog';
 import { Upload, RefreshCw, Pause, Play, Loader2, AlertTriangle } from 'lucide-react';
-import { conferirContatosNovoMundo, NOVO_MUNDO_MAX, NOVO_MUNDO_AVISO } from '@/lib/novoMundoContatos';
+import { conferirContatosNovoMundo, NOVO_MUNDO_MAX, NOVO_MUNDO_AVISO, type PapelColunaNM } from '@/lib/novoMundoContatos';
+import { NovoMundoMapearColunasDialog } from './NovoMundoMapearColunasDialog';
 import { toast } from 'sonner';
 import { RECUPERACAO_MAX_DIA, RECUPERACAO_TETO_BRL } from '../../../supabase/functions/_shared/recuperacao-volume';
 
@@ -22,6 +23,7 @@ export function NovoMundoContatosCard() {
   const [previa, setPrevia] = useState<Previa | null>(null);
   const [consentimento, setConsentimento] = useState(false);
   const [confirmarAtivacao, setConfirmarAtivacao] = useState(false);
+  const [planilha, setPlanilha] = useState<{ arquivo: string; rows: unknown[][] } | null>(null);
   const query = useQuery({ queryKey: ['nm-contatos-resumo'], staleTime: 300_000, refetchOnWindowFocus: false, queryFn: async () => {
     const { data, error } = await supabase.rpc('resumo_base_novo_mundo');
     if (error) throw error;
@@ -42,14 +44,25 @@ export function NovoMundoContatosCard() {
       if (!sheet) throw new Error('Planilha vazia.');
       const fullRange = sheet['!fullref'] || sheet['!ref'];
       if (fullRange && XLSX.utils.decode_range(fullRange).e.r >= 30001) throw new Error('Envie no máximo 30.000 contatos, além do cabeçalho. Divida a base em lotes.');
-      const checked = conferirContatosNovoMundo(XLSX.utils.sheet_to_json<unknown[]>(sheet, { header: 1, raw: true, defval: '' }));
-      if (checked.conflitos.length) throw new Error(`${checked.conflitos.length} telefones repetidos com variáveis diferentes. Revise o arquivo.`);
-      if (!checked.contatos.length) throw new Error('Nenhum contato válido no arquivo.');
-      const { data, error } = await supabase.rpc('importar_contatos_novo_mundo', { p_arquivo: file.name, p_rows: checked.contatos, p_resumo: { total: checked.total, invalidos: checked.invalidos, duplicados: checked.duplicados }, p_autorizado: true, p_simulacao: true });
-      if (error) throw error;
-      setPrevia({ ...checked, arquivo: file.name, resumo: data as unknown as Conferencia });
-    } catch (e) { toast.error(e instanceof Error ? e.message : 'Não foi possível conferir o arquivo.'); }
+      const rows = XLSX.utils.sheet_to_json<unknown[]>(sheet, { header: 1, raw: true, defval: '' }).filter(r => r.some(v => String(v ?? '').trim() !== ''));
+      if (!rows.length) throw new Error('A planilha não contém contatos.');
+      setPlanilha({ arquivo: file.name, rows });
+    } catch (e) { toast.error(e instanceof Error ? e.message : 'Não foi possível ler o arquivo.'); }
     finally { setLendo(false); if (input.current) input.current.value = ''; }
+  };
+  const conferir = async (papeis: PapelColunaNM[], temCabecalho: boolean) => {
+    if (!planilha) return;
+    setLendo(true);
+    try {
+      const checked = conferirContatosNovoMundo(planilha.rows, papeis, temCabecalho);
+      if (checked.conflitos.length) toast.warning(`${checked.conflitos.length} telefones aparecem com nomes diferentes; foi mantido o primeiro nome de cada um.`);
+      if (!checked.contatos.length) throw new Error('Nenhum contato válido no arquivo. Confira se marcou as colunas certas.');
+      const { data, error } = await supabase.rpc('importar_contatos_novo_mundo', { p_arquivo: planilha.arquivo, p_rows: checked.contatos, p_resumo: { total: checked.total, invalidos: checked.invalidos, duplicados: checked.duplicados }, p_autorizado: true, p_simulacao: true });
+      if (error) throw error;
+      setPrevia({ ...checked, arquivo: planilha.arquivo, resumo: data as unknown as Conferencia });
+      setPlanilha(null);
+    } catch (e) { toast.error(e instanceof Error ? e.message : 'Não foi possível conferir o arquivo.'); }
+    finally { setLendo(false); }
   };
   const importar = useMutation({ mutationFn: async () => {
     if (!previa || !consentimento) throw new Error('Confirme a autorização WhatsApp dos contatos.');
@@ -70,6 +83,11 @@ export function NovoMundoContatosCard() {
         <Button variant="outline" onClick={() => input.current?.click()} disabled={lendo || importar.isPending}>{lendo ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Upload className="mr-2 h-4 w-4" />}Importar Excel</Button>
         <Button variant={resumo?.ativo ? 'outline' : 'default'} disabled={ativar.isPending || !resumo || (!resumo.ativo && saldo === 0)} onClick={() => resumo?.ativo ? ativar.mutate(false) : setConfirmarAtivacao(true)}>{resumo?.ativo ? <Pause className="mr-2 h-4 w-4" /> : <Play className="mr-2 h-4 w-4" />}{resumo?.ativo ? 'Pausar base' : 'Ativar base'}</Button>
       </div>
+      <div className="w-full rounded-md border bg-muted/40 p-3 text-xs text-muted-foreground">
+        <p className="font-medium text-foreground">Formato da planilha Excel (.xlsx)</p>
+        <p>Coluna com o <strong>telefone</strong> (com ou sem 55, ex.: 61995770974) e coluna com o <strong>nome</strong> do cliente (ex.: Abadia Alves Da Silva). Coluna de saudação é opcional (ex.: tudo bem?).</p>
+        <p>Cabeçalho é opcional; ao importar você escolhe qual coluna é cada informação. Até 30.000 linhas por arquivo.</p>
+      </div>
       <input ref={input} type="file" accept=".xlsx,.xls" className="hidden" aria-label="Excel contatos Novo Mundo" onChange={e => ler(e.target.files?.[0])} />
     </div>
     {query.isError ? <div className="flex items-center gap-2 text-sm text-destructive"><AlertTriangle className="h-4 w-4" />Não foi possível atualizar o saldo. <Button variant="link" onClick={() => query.refetch()}>Tentar novamente</Button></div> : <>
@@ -84,13 +102,13 @@ export function NovoMundoContatosCard() {
       {resumo && saldo <= NOVO_MUNDO_AVISO && <p className="flex items-center gap-2 text-sm text-destructive"><AlertTriangle className="h-4 w-4 shrink-0" />{saldo === 0 ? 'Estoque esgotado. A base não enviará até receber contatos novos.' : 'Estoque baixo. Importe contatos novos antes de esgotar.'}</p>}
       {resumo?.ultimo_lote && <p className="text-xs text-muted-foreground break-all">Último lote: {resumo.ultimo_lote.arquivo} · {resumo.ultimo_lote.adicionados} adicionados · Descartados no total: {resumo.descartados}</p>}
     </>}
+    <NovoMundoMapearColunasDialog arquivo={planilha?.arquivo ?? null} rows={planilha?.rows ?? null} carregando={lendo} onCancel={() => setPlanilha(null)} onConfirm={conferir} />
     <Dialog open={!!previa} onOpenChange={open => { if (!open && !importar.isPending) setPrevia(null); }}>
       <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto"><DialogHeader><DialogTitle>Conferir contatos Novo Mundo</DialogTitle><DialogDescription>{previa?.arquivo} · {previa?.total} linhas · Template fins_de_atualizacao_cadastral</DialogDescription></DialogHeader>
         {previa && <>
           <div className="grid grid-cols-2 gap-2 text-sm"><span>Novos: <strong>{previa.resumo.adicionados}</strong></span><span>Inválidos: {previa.resumo.invalidos}</span><span>Duplicados no arquivo: {previa.duplicados - previa.coincidencias.length}</span><span>Já pendentes: {previa.resumo.ja_pendentes}</span><span>Já utilizados: {previa.resumo.ja_utilizados}</span><span>Blacklist: {previa.resumo.bloqueados}</span></div>
           {previa.coincidencias.length > 0 && <div className="space-y-2 text-sm"><p className="flex items-start gap-2"><AlertTriangle className="h-4 w-4 shrink-0 text-muted-foreground" />{previa.coincidencias.length} telefone(s) com DDD diferente, mas os mesmos 8 dígitos finais. Não são telefones completos repetidos. A importação pode continuar; apenas o primeiro de cada final será mantido pela proteção contra reenvio.</p><ul className="max-h-32 overflow-y-auto text-xs text-muted-foreground">{previa.coincidencias.map(c => <li key={`${c.linha}-${c.telefone}`}>Linha {c.linha}: {c.telefone} ignorado · mantido {c.mantido}</li>)}</ul></div>}
-          {previa.headers && <p className="text-xs text-muted-foreground">Cabeçalho reconhecido: {previa.headers.join(' | ')}</p>}
-          <div className="overflow-x-auto"><table className="w-full text-xs"><thead><tr className="border-b text-left"><th className="p-2">A · {previa.headers?.[0] ?? 'Telefone'}</th><th className="p-2">B · {previa.headers?.[1] ?? '{{1}}'}</th><th className="p-2">C · {previa.headers?.[2] ?? '{{2}}'}</th></tr></thead><tbody>{previa.contatos.slice(0, 5).map(c => <tr key={c.telefone} className="border-b"><td className="p-2">{c.telefone}</td><td className="p-2 break-words">{c.var1}</td><td className="p-2 break-words">{c.var2}</td></tr>)}</tbody></table></div>
+          <div className="overflow-x-auto"><table className="w-full text-xs"><thead><tr className="border-b text-left"><th className="p-2">Telefone</th><th className="p-2">Saudação {'{{1}}'}</th><th className="p-2">Nome {'{{2}}'}</th></tr></thead><tbody>{previa.contatos.slice(0, 5).map(c => <tr key={c.telefone} className="border-b"><td className="p-2">{c.telefone}</td><td className="p-2 break-words">{c.var1}</td><td className="p-2 break-words">{c.var2}</td></tr>)}</tbody></table></div>
           <label className="flex items-start gap-2 text-sm"><Checkbox checked={consentimento} onCheckedChange={v => setConsentimento(v === true)} disabled={importar.isPending} /><span>Confirmo que estes contatos autorizaram receber mensagens pelo WhatsApp.</span></label>
         </>}
         <DialogFooter><Button variant="outline" disabled={importar.isPending} onClick={() => setPrevia(null)}>Cancelar</Button><Button disabled={!consentimento || importar.isPending || !previa?.resumo.adicionados} onClick={() => importar.mutate()}>{importar.isPending && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}Confirmar importação</Button></DialogFooter>
