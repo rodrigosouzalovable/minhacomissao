@@ -1870,6 +1870,13 @@
       "when": 1795529552418,
       "tag": "0266_inbox_meta_rls_performance",
       "breakpoints": true
+    },
+    {
+      "idx": 267,
+      "version": "7",
+      "when": 1795529600305,
+      "tag": "0267_inbox_meta_rls_performance_2",
+      "breakpoints": true
     }
   ]
 }
