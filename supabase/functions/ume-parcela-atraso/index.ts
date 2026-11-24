@@ -16,6 +16,8 @@ const corsHeaders = {
 const json = (b: unknown, s = 200) => new Response(JSON.stringify(b), { status: s, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
 const Body = z.object({ cpf: z.string().min(11).max(14), vencimento: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional() });
 
+import { contaUmeDoUsuario, alvoUme } from '../_shared/ume-conta.ts';
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
   const caller = await requireCaller(req, { user: 'any' });
@@ -39,7 +41,8 @@ Deno.serve(async (req) => {
     const ambiente: UmeAmbiente = Deno.env.get('UME_PRD_LIBERADO') === 'true' ? 'prd' : 'dev';
     const sessao = caller.userId ? await sessaoUme(db, caller.userId, ambiente) : null;
     if (!sessao) return json({ success: false, error: 'login_ume', message: MSG_LOGIN_UME });
-    const alvo = { amb: ambiente, token: sessao.token }; // boleto sai no login do atendente
+    const conta = await contaUmeDoUsuario(db, caller.userId);
+    const alvo = alvoUme(ambiente, conta, sessao.token); // boleto sai no login do atendente, na conta dele
     const operador = operadorDoToken(sessao.token, sessao.username);
     const { data: cliSftp } = await db.from('ume_carteira_clientes').select('borrower_id, nome, carteira').eq('cpf', cpf).maybeSingle();
     let cli: { borrower_id: string; nome: string | null; carteira: string | null } | null = cliSftp?.borrower_id ? cliSftp as any : null;
@@ -99,7 +102,7 @@ Deno.serve(async (req) => {
       if (b2 && (b2.pixCode || b2.invoiceUrl) && b2.vencimento === desejada && valorOk(b2)) return b2;
       // Mesmo dia recusado no login do atendente: tenta pela conta da empresa.
       if (desejada === hoje) {
-        const r3 = await umeApi.gerarBoletos(ambiente, ids, desejada);
+        const r3 = await umeApi.gerarBoletos(alvoUme(ambiente, conta), ids, desejada);
         const b3 = r3.ok ? lerBoleto(r3.data, desejada) : null;
         console.log('[ume-parcela-atraso] fallback empresa', { ok: r3.ok, devolvida: b3?.vencimento });
         if (b3 && (b3.pixCode || b3.invoiceUrl) && b3.vencimento === desejada && valorOk(b3)) return { ...b3, contaEmpresa: true };

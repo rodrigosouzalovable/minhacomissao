@@ -3,6 +3,8 @@
 // sem chamadas em lote e no máximo 30 requisições por minuto.
 
 export type UmeAmbiente = 'dev' | 'prd';
+/** Conta UME usada: 'padrao' = Souza e Ribeiro; 'amaral' = loja do parceiro Thiago Nogueira. */
+export type UmeConta = 'padrao' | 'amaral';
 
 const BASES: Record<UmeAmbiente, string> = {
   dev: 'https://dev-api.ume.com.br',
@@ -22,10 +24,10 @@ async function aguardarVez() {
   if (espera > 0) await new Promise((r) => setTimeout(r, espera));
 }
 
-const tokens = new Map<UmeAmbiente, { token: string; expiraEm: number }>();
+const tokens = new Map<string, { token: string; expiraEm: number }>();
 
-function credenciais(amb: UmeAmbiente) {
-  const p = amb === 'dev' ? 'UME_DEV_' : 'UME_PRD_';
+function credenciais(amb: UmeAmbiente, conta: UmeConta = 'padrao') {
+  const p = (conta === 'amaral' ? 'UME_AMARAL_' : 'UME_') + (amb === 'dev' ? 'DEV_' : 'PRD_');
   const c = {
     client_id: Deno.env.get(`${p}CLIENT_ID`) ?? '',
     client_secret: Deno.env.get(`${p}CLIENT_SECRET`) ?? '',
@@ -36,14 +38,15 @@ function credenciais(amb: UmeAmbiente) {
   return c;
 }
 
-export async function obterTokenUme(amb: UmeAmbiente, forcar = false): Promise<string> {
-  const atual = tokens.get(amb);
+export async function obterTokenUme(amb: UmeAmbiente, forcar = false, conta: UmeConta = 'padrao'): Promise<string> {
+  const chave = `${conta}:${amb}`;
+  const atual = tokens.get(chave);
   if (!forcar && atual && atual.expiraEm > Date.now()) return atual.token;
   await aguardarVez();
   const resp = await fetch(`${BASES[amb]}/keycloak/realms/consultancy/protocol/openid-connect/token`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/x-www-form-urlencoded', 'User-Agent': UA },
-    body: new URLSearchParams({ grant_type: 'password', ...credenciais(amb) }),
+    body: new URLSearchParams({ grant_type: 'password', ...credenciais(amb, conta) }),
     signal: AbortSignal.timeout(15_000),
   });
   const txt = await resp.text();
@@ -51,20 +54,23 @@ export async function obterTokenUme(amb: UmeAmbiente, forcar = false): Promise<s
   const j = JSON.parse(txt);
   const seg = Number(j.expires_in) || 300;
   // renova 60s antes de expirar
-  tokens.set(amb, { token: j.access_token, expiraEm: Date.now() + Math.max(30, seg - 60) * 1000 });
+  tokens.set(chave, { token: j.access_token, expiraEm: Date.now() + Math.max(30, seg - 60) * 1000 });
   return j.access_token;
 }
 
 export interface UmeResposta { status: number; ok: boolean; data: unknown }
 
-// Alvo da chamada: conta da empresa (ambiente) ou sessão de um atendente.
-export type UmeAlvo = UmeAmbiente | { amb: UmeAmbiente; token: string };
+// Alvo da chamada: conta da empresa (ambiente), conta de parceiro ou sessão de um atendente.
+export type UmeAlvo = UmeAmbiente | { amb: UmeAmbiente; token?: string; conta?: UmeConta };
 const ambDe = (a: UmeAlvo): UmeAmbiente => (typeof a === 'string' ? a : a.amb);
+export const contaDe = (a: UmeAlvo): UmeConta => (typeof a === 'string' ? 'padrao' : a.conta ?? 'padrao');
+/** Alvo da conta (sem login de atendente): conta padrão continua sendo só o ambiente. */
+export const alvoConta = (amb: UmeAmbiente, conta: UmeConta = 'padrao'): UmeAlvo => (conta === 'padrao' ? amb : { amb, conta });
 
 export const UME_BASES = BASES;
 export const UME_UA = UA;
-export function umeClient(amb: UmeAmbiente) {
-  const c = credenciais(amb);
+export function umeClient(amb: UmeAmbiente, conta: UmeConta = 'padrao') {
+  const c = credenciais(amb, conta);
   return { client_id: c.client_id, client_secret: c.client_secret };
 }
 
@@ -75,9 +81,10 @@ export async function chamarUme(
   body?: unknown,
 ): Promise<UmeResposta> {
   const amb = ambDe(alvo);
-  const tokenUsuario = typeof alvo === 'string' ? null : alvo.token;
+  const tokenUsuario = typeof alvo === 'string' ? null : alvo.token ?? null;
+  const conta = contaDe(alvo);
   for (let tentativa = 0; tentativa < 2; tentativa++) {
-    const token = tokenUsuario ?? await obterTokenUme(amb, tentativa > 0);
+    const token = tokenUsuario ?? await obterTokenUme(amb, tentativa > 0, conta);
     await aguardarVez();
     const resp = await fetch(`${BASES[amb]}${COORD}${caminho}`, {
       method: metodo,
@@ -93,7 +100,7 @@ export async function chamarUme(
     let data: unknown = null;
     try { data = txt ? JSON.parse(txt) : null; } catch { data = { raw: txt.slice(0, 2000) }; }
     if (resp.status === 401 && tokenUsuario) throw new Error('ume_login_expirado');
-    if (resp.status === 401 && tentativa === 0) { tokens.delete(amb); continue; }
+    if (resp.status === 401 && tentativa === 0) { tokens.delete(`${conta}:${amb}`); continue; }
     return { status: resp.status, ok: resp.ok, data };
   }
   return { status: 401, ok: false, data: null };
@@ -109,13 +116,13 @@ export const umeApi = {
     return chamarUme(amb, 'GET', `/contracts/simulate-multiple-installments?${qs}`);
   },
   gerarBoletos: (amb: UmeAlvo, installmentsIds: Array<string | number>, dueDate: string, operador?: UmeOperador) =>
-    comFallback(amb, (a) => chamarUme(a, 'POST', '/invoices/multiple', { installmentsIds: installmentsIds.map(String), dueDate, ...campoOperador(operador) })),
+    comFallback(amb, (a) => chamarUme(a, 'POST', '/invoices/multiple', { installmentsIds: installmentsIds.map(String), dueDate, ...campoOperador(operador, contaDe(amb)) })),
   gerarBoletoUnico: (amb: UmeAlvo, borrowerId: string, dueDate: string, operador?: UmeOperador) =>
-    comFallback(amb, (a) => chamarUme(a, 'POST', '/invoices/chatbot', { borrowerId, dueDate, ...campoOperador(operador) })),
+    comFallback(amb, (a) => chamarUme(a, 'POST', '/invoices/chatbot', { borrowerId, dueDate, ...campoOperador(operador, contaDe(amb)) })),
   simularRenegociacao: (amb: UmeAlvo, p: UmeRenegociacao) =>
-    chamarUme(amb, 'POST', '/renegotiations/simulations', corpoReneg(p)),
+    chamarUme(amb, 'POST', '/renegotiations/simulations', corpoReneg(p, contaDe(amb))),
   fecharAcordo: (amb: UmeAlvo, p: UmeRenegociacao) =>
-    comFallback(amb, (a) => chamarUme(a, 'POST', '/renegotiations', corpoReneg(p))),
+    comFallback(amb, (a) => chamarUme(a, 'POST', '/renegotiations', corpoReneg(p, contaDe(amb)))),
   /** Acordo pelo mesmo caminho do backoffice, com o login do atendente: a UME grava ele como operador. Sem fallback para a conta da empresa. */
   fecharAcordoComoAtendente: (amb: UmeAmbiente, token: string, p: UmeRenegociacao) =>
     chamarBackoffice(amb, token, 'POST', '/collections/renegotiations', {
@@ -151,7 +158,8 @@ export async function chamarBackoffice(amb: UmeAmbiente, token: string, metodo: 
 }
 
 export type UmeOperador = { nome: string; operatorId?: string };
-const campoOperador = (o?: UmeOperador) => ({ generatedAt: o?.nome || UME_ASSESSORIA, ...(o?.operatorId ? { operatorId: o.operatorId } : {}) });
+export const UME_NOME_CONTA: Record<UmeConta, string> = { padrao: UME_ASSESSORIA, amaral: 'Amaral' };
+const campoOperador = (o?: UmeOperador, conta: UmeConta = 'padrao') => ({ generatedAt: o?.nome || UME_NOME_CONTA[conta], ...(o?.operatorId ? { operatorId: o.operatorId } : {}) });
 // Tenta com o login do atendente; se a UME recusar esse acesso (401/403), usa a conta da empresa
 // mantendo o nome/código do operador no corpo.
 async function comFallback(alvo: UmeAlvo, f: (a: UmeAlvo) => Promise<UmeResposta>): Promise<UmeResposta> {
@@ -164,7 +172,8 @@ async function comFallback(alvo: UmeAlvo, f: (a: UmeAlvo) => Promise<UmeResposta
     if (String((e as Error)?.message) !== 'ume_login_expirado') throw e;
     console.warn('[ume-api] login do atendente expirado');
   }
-  return f(alvo.amb);
+  // Volta sempre para a conta do próprio alvo (parceiro nunca cai na conta da empresa).
+  return f(alvoConta(alvo.amb, contaDe(alvo)));
 }
 
 export interface UmeRenegociacao {
@@ -180,12 +189,12 @@ export interface UmeRenegociacao {
 
 // A API real valida "installmentIds" (o manual escreve "installmentsIds").
 // IDs sempre como texto: números grandes podem chegar em notação científica.
-function corpoReneg(p: UmeRenegociacao) {
+function corpoReneg(p: UmeRenegociacao, conta: UmeConta = 'padrao') {
   const { installmentsIds, operador, ...resto } = p;
   return {
     ...resto,
     installmentIds: installmentsIds.map(String),
-    generatedAt: operador?.nome || UME_ASSESSORIA,
+    generatedAt: operador?.nome || UME_NOME_CONTA[conta],
     ...(operador?.operatorId ? { operatorId: operador.operatorId } : {}),
   };
 }

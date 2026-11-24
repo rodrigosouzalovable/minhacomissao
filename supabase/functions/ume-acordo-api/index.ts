@@ -34,6 +34,8 @@ const Body = z.discriminatedUnion('acao', [
 
 const round2 = (v: number) => Math.round(v * 100) / 100;
 
+import { contaUmeDoUsuario, alvoUme } from '../_shared/ume-conta.ts';
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
   const __caller = await requireCaller(req, { user: 'any' });
@@ -95,6 +97,7 @@ Deno.serve(async (req) => {
     if (b.acao === 'efetivar' && b.confirmar !== true) return json({ error: 'confirmação obrigatória' }, 400);
 
     const ambiente: UmeAmbiente = Deno.env.get('UME_PRD_LIBERADO') === 'true' ? 'prd' : 'dev';
+    const conta = await contaUmeDoUsuario(db, u.user.id);
     // Acordo real sai no nome do atendente: exige o login UME dele.
     let operador: { nome: string; operatorId?: string } | undefined;
     let tokenAtendente: string | null = null;
@@ -117,7 +120,7 @@ Deno.serve(async (req) => {
     // Total combinado com o cliente: a UME atualiza a dívida com encargos de atraso,
     // então lemos o totalDebt atualizado e enviamos a diferença como desconto, sem juros.
     if (b.totalAlvo && b.totalAlvo > 0) {
-      const base = await umeApi.simularRenegociacao(ambiente, { ...corpo, operador: undefined, monetaryDiscount: 0, interestRate: 0 });
+      const base = await umeApi.simularRenegociacao(alvoUme(ambiente, conta), { ...corpo, operador: undefined, monetaryDiscount: 0, interestRate: 0 });
       const totalDebt = Number((base.data as Record<string, unknown> | null)?.totalDebt);
       if (!base.ok || !Number.isFinite(totalDebt)) {
         const d = base.data as Record<string, unknown> | null;
@@ -137,7 +140,7 @@ Deno.serve(async (req) => {
       corpo.interestRate = 0;
     }
     const r = b.acao === 'simular'
-      ? await umeApi.simularRenegociacao(ambiente, corpo)
+      ? await umeApi.simularRenegociacao(alvoUme(ambiente, conta), corpo)
       : await umeApi.fecharAcordoComoAtendente(ambiente, tokenAtendente!, corpo);
     if (b.acao === 'efetivar' && (r.status === 401 || r.status === 403)) {
       return json({ success: false, error: 'login_ume', message: 'A UME recusou seu login. Entre de novo no quadro "Login UME" para o acordo sair no seu nome.' });

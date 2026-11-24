@@ -21,6 +21,7 @@ import { consultarUme, propostaDaUme } from '../_shared/ume-desconto.ts';
 import { umeApi } from '../_shared/ume-api.ts';
 import { detectarPropostaPreviaNoHistorico, type PropostaPrevia } from '../_shared/proposta-previa.ts';
 import { ehBotaoQueroBoleto, credorBoletoAutomatico, vencimentoDiaUtil, valorParcelaAcordo, valorCompativelComParcela } from '../_shared/boleto-imediato.ts';
+import { contaUmeDaInstancia, alvoUme } from '../_shared/ume-conta.ts';
 import { atenderRespostaCadastral } from '../_shared/recuperacao-cadastral-resposta.ts';
 
 const MSG_NUMERO_ERRADO = 'Entendi, obrigado pela atenção e desculpe o incômodo. Tenha um ótimo dia! 🙏';
@@ -160,7 +161,7 @@ Deno.serve(async (req) => {
           if (consulta.encontrado && consulta.borrowerId) {
             const ambiente = Deno.env.get('UME_PRD_LIBERADO') === 'true' ? 'prd' : 'dev';
             const venc = vencimentoDiaUtil(hojeSP());
-            const r = await umeApi.gerarBoletoUnico(ambiente, consulta.borrowerId, venc);
+            const r = await umeApi.gerarBoletoUnico(alvoUme(ambiente, await contaUmeDaInstancia(supabase, (contato as any).instancia_id)), consulta.borrowerId, venc);
             if (r.ok) {
               const d = r.data as Record<string, unknown>;
               const valor = Number(d.invoiceTotalValue ?? 0) || null;
@@ -946,7 +947,7 @@ Deno.serve(async (req) => {
           const consulta = idSftp ?? await consultarUme(supabase, cpf, { perfil: 'essencial', aguardarCache: false });
           if (!consulta.encontrado || !consulta.borrowerId) return false;
           const ambiente = Deno.env.get('UME_PRD_LIBERADO') === 'true' ? 'prd' : 'dev';
-          const r = await umeApi.gerarBoletoUnico(ambiente, consulta.borrowerId, venc);
+          const r = await umeApi.gerarBoletoUnico(alvoUme(ambiente, await contaUmeDaInstancia(supabase, (contato as any).instancia_id)), consulta.borrowerId, venc);
           if (!r.ok) { console.error('[IAGO] repescagem: UME recusou', r.status); return false; }
           const d = r.data as Record<string, unknown>;
           const valor = Number(d.invoiceTotalValue ?? 0) || null;
@@ -1039,7 +1040,7 @@ Deno.serve(async (req) => {
         if (consultaBol.encontrado && consultaBol.borrowerId) {
           const ambiente = Deno.env.get('UME_PRD_LIBERADO') === 'true' ? 'prd' : 'dev';
           const venc = vencimentoDiaUtil(hojeSP());
-          const r = await umeApi.gerarBoletoUnico(ambiente, consultaBol.borrowerId, venc);
+          const r = await umeApi.gerarBoletoUnico(alvoUme(ambiente, await contaUmeDaInstancia(supabase, (contato as any).instancia_id)), consultaBol.borrowerId, venc);
           if (r.ok) {
             const d = r.data as Record<string, unknown>;
             const valor = Number(d.invoiceTotalValue ?? 0) || null;

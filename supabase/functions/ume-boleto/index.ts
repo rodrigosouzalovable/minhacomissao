@@ -21,6 +21,8 @@ const Body = z.object({
   origem: z.enum(['atendente', 'iago']).default('atendente'),
 });
 
+import { contaUmeDoUsuario, alvoUme } from '../_shared/ume-conta.ts';
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
   const __caller = await requireCaller(req, { user: 'any' });
@@ -56,13 +58,14 @@ Deno.serve(async (req) => {
 
     // Fase de homologação: somente DEV. Produção só quando liberada explicitamente.
     const ambiente: UmeAmbiente = Deno.env.get('UME_PRD_LIBERADO') === 'true' ? 'prd' : 'dev';
+    const conta = await contaUmeDoUsuario(service, u.user.id);
     const sessao = origem === 'atendente' ? await sessaoUme(service, u.user.id, ambiente) : null;
     if (origem === 'atendente' && !sessao) return json({ success: false, error: 'login_ume', message: MSG_LOGIN_UME });
 
     const t0 = Date.now();
     const r = sessao
-      ? await umeApi.gerarBoletoUnico({ amb: ambiente, token: sessao.token }, consulta.borrowerId, vencimento, operadorDoToken(sessao.token, sessao.username))
-      : await umeApi.gerarBoletoUnico(ambiente, consulta.borrowerId, vencimento);
+      ? await umeApi.gerarBoletoUnico(alvoUme(ambiente, conta, sessao.token), consulta.borrowerId, vencimento, operadorDoToken(sessao.token, sessao.username))
+      : await umeApi.gerarBoletoUnico(alvoUme(ambiente, conta), consulta.borrowerId, vencimento);
     console.log('[ume-boleto]', { ambiente, ms: Date.now() - t0, status: r.status });
 
     if (!r.ok) {
@@ -77,7 +80,7 @@ Deno.serve(async (req) => {
       for (const k of ['installmentIds', 'installmentsIds']) if (Array.isArray((d as any)?.[k])) (d as any)[k].forEach((x: unknown) => ids.add(String(x)));
       if (Array.isArray((d as any)?.installments)) (d as any).installments.forEach((x: any) => { if (x?.id != null) ids.add(String(x.id)); });
       if (ids.size) {
-        const r2 = await umeApi.gerarBoletos({ amb: ambiente, token: sessao.token }, [...ids], vencimento, operadorDoToken(sessao.token, sessao.username));
+        const r2 = await umeApi.gerarBoletos(alvoUme(ambiente, conta, sessao.token), [...ids], vencimento, operadorDoToken(sessao.token, sessao.username));
         const d2 = (Array.isArray(r2.data) ? r2.data[0] : r2.data) as Record<string, unknown>;
         if (r2.ok && (d2?.pixCode || d2?.invoiceUrl)) d = d2;
       }
