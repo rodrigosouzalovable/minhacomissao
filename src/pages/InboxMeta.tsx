@@ -806,7 +806,7 @@ export default function InboxMeta() {
 
 
   // Paginação da lista de conversas: lote inicial leve + "carregar mais"
-  const PAGE_CONTATOS = 300;
+  const PAGE_CONTATOS = 150;
   const contatoIdsRef = useRef<string[]>([]);
   const taggedPageRef = useRef<{ key: string; rows: MetaContato[]; exhausted: boolean }>({ key: '', rows: [], exhausted: false });
   const contatosRequestRef = useRef(0);
