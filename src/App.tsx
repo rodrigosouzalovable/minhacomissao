@@ -74,6 +74,7 @@ const Consultoria = lazy(() => retryImport(() => import("./pages/Consultoria")))
 const Cotacoes = lazy(() => retryImport(() => import("./pages/Cotacoes")));
 const LembreteMeta = lazy(() => retryImport(() => import("./pages/LembreteMeta")));
 const GoogleMapsLeads = lazy(() => retryImport(() => import("./pages/GoogleMapsLeads")));
+const IcredOportunidades = lazy(() => retryImport(() => import("./pages/IcredOportunidades")));
 const FabricaVideos = lazy(() => retryImport(() => import("./pages/FabricaVideos")));
 const ClienteUsa = lazy(() => retryImport(() => import("./pages/ClienteUsa")));
 const ProspeccaoB2B = lazy(() => retryImport(() => import("./pages/ProspeccaoB2B")));
@@ -313,6 +314,7 @@ const App = () => (
             <Route path="/admin/cotacoes" element={<AdminRoute><Cotacoes /></AdminRoute>} />
             <Route path="/admin/lembrete-meta" element={<AdminRoute><LembreteMeta /></AdminRoute>} />
             <Route path="/admin/google-maps-leads" element={<PermissionRoute><GoogleMapsLeads /></PermissionRoute>} />
+            <Route path="/admin/icred" element={<PermissionRoute><IcredOportunidades /></PermissionRoute>} />
             <Route path="/admin/fabrica-videos" element={<PermissionRoute><FabricaVideos /></PermissionRoute>} />
             <Route path="/admin/prospeccao-b2b" element={<PermissionRoute><ProspeccaoB2B /></PermissionRoute>} />
             <Route path="/cliente-usa" element={<PermissionRoute><ClienteUsa /></PermissionRoute>} />

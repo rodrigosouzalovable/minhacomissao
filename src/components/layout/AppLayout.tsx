@@ -132,6 +132,7 @@ export const navItems: NavItem[] = [
   { href: '/admin/calculadora-ume', label: 'Calculadora UME', icon: FileSpreadsheet, adminOnly: true },
   { href: '/admin/google-maps-leads', label: 'Google Maps Leads', icon: MapPin, adminOnly: true },
   { href: '/cliente-usa', label: 'AI Assistant (USA)', icon: Clapperboard },
+  { href: '/admin/icred', label: 'iCred FGTS', icon: Coins, adminOnly: true },
   { href: '/admin/fabrica-videos', label: 'Fábrica de Vídeos', icon: Clapperboard, adminOnly: true },
   { href: '/admin/prospeccao-b2b', label: 'LinkedIn (B2B)', icon: Linkedin, adminOnly: true },
   { href: '/admin/certificado-digital', label: 'Certificado Digital', icon: FileKey2, adminOnly: true },

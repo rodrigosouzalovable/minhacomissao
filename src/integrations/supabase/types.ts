@@ -4452,6 +4452,51 @@ export type Database = {
         }
         Relationships: []
       }
+      icred_oportunidades: {
+        Row: {
+          celular: string | null
+          cpf: string
+          created_at: string
+          created_by: string | null
+          id: string
+          lote: string | null
+          nome: string | null
+          observacao: string | null
+          produto: string
+          status: string
+          updated_at: string
+          valor_liberado: number | null
+        }
+        Insert: {
+          celular?: string | null
+          cpf: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          lote?: string | null
+          nome?: string | null
+          observacao?: string | null
+          produto?: string
+          status?: string
+          updated_at?: string
+          valor_liberado?: number | null
+        }
+        Update: {
+          celular?: string | null
+          cpf?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          lote?: string | null
+          nome?: string | null
+          observacao?: string | null
+          produto?: string
+          status?: string
+          updated_at?: string
+          valor_liberado?: number | null
+        }
+        Relationships: []
+      }
       importacao_jobs: {
         Row: {
           atualizado_em: string
