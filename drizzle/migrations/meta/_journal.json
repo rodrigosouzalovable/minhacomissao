@@ -1891,6 +1891,13 @@
       "when": 1795559317232,
       "tag": "0269_envio_meta_job_permitir_reenvio",
       "breakpoints": true
+    },
+    {
+      "idx": 270,
+      "version": "7",
+      "when": 1795560439641,
+      "tag": "0270_user_permissions_equipe_ume",
+      "breakpoints": true
     }
   ]
 }

@@ -11200,6 +11200,7 @@ export type Database = {
           concedido_por: string | null
           credores: string[]
           criado_em: string
+          equipe_ume: string
           id: string
           inbox_compartilhado: boolean
           meta_folder_padrao_id: string | null
@@ -11223,6 +11224,7 @@ export type Database = {
           concedido_por?: string | null
           credores?: string[]
           criado_em?: string
+          equipe_ume?: string
           id?: string
           inbox_compartilhado?: boolean
           meta_folder_padrao_id?: string | null
@@ -11246,6 +11248,7 @@ export type Database = {
           concedido_por?: string | null
           credores?: string[]
           criado_em?: string
+          equipe_ume?: string
           id?: string
           inbox_compartilhado?: boolean
           meta_folder_padrao_id?: string | null
@@ -13259,6 +13262,10 @@ export type Database = {
           isOneToOne: true
           isSetofReturn: false
         }
+      }
+      admin_definir_equipe_ume: {
+        Args: { _equipe: string; _user_id: string }
+        Returns: undefined
       }
       alterar_credor_acordo: {
         Args: { p_acordo_id: string; p_novo_credor: string }

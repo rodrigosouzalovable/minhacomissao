@@ -55,6 +55,7 @@ interface UserWithRole {
   criado_em: string;
   whatsappHabilitado: boolean;
   ativo: boolean;
+  equipe: 'padrao' | 'amaral';
 }
 
 const roleLabels: Record<AppRole, string> = {
@@ -78,6 +79,7 @@ export default function AdminUsuarios() {
   const [resetPasswordUser, setResetPasswordUser] = useState<UserWithRole | null>(null);
   const [permissionsUser, setPermissionsUser] = useState<UserWithRole | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
+  const [filtroEquipe, setFiltroEquipe] = useState<'todos' | 'padrao' | 'amaral'>('todos');
   const [deleteUser, setDeleteUser] = useState<UserWithRole | null>(null);
   const [whatsappConfigUser, setWhatsappConfigUser] = useState<UserWithRole | null>(null);
   const [transferUser, setTransferUser] = useState<UserWithRole | null>(null);
@@ -107,6 +109,9 @@ export default function AdminUsuarios() {
 
       if (rolesError) throw rolesError;
 
+      const { data: perms } = await supabase.from('user_permissions').select('user_id, equipe_ume');
+      const equipePor = new Map((perms ?? []).map((p: any) => [p.user_id, p.equipe_ume]));
+
       // Combine profiles with roles
       const usersWithRoles: UserWithRole[] = profiles.map((profile) => {
         const userRole = roles.find((r) => r.user_id === profile.id);
@@ -118,11 +123,24 @@ export default function AdminUsuarios() {
           criado_em: profile.criado_em,
           whatsappHabilitado: profile.whatsapp_lembretes_habilitado ?? false,
           ativo: (profile as any).ativo ?? true,
+          equipe: equipePor.get(profile.id) === 'amaral' ? 'amaral' : 'padrao',
         };
       });
 
       return usersWithRoles;
     },
+  });
+
+  const equipeMutation = useMutation({
+    mutationFn: async ({ userId, equipe }: { userId: string; equipe: string }) => {
+      const { error } = await supabase.rpc('admin_definir_equipe_ume' as any, { _user_id: userId, _equipe: equipe });
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['admin-users'] });
+      toast({ title: 'Equipe atualizada' });
+    },
+    onError: (e: any) => toast({ title: 'Erro ao salvar equipe', description: e.message, variant: 'destructive' }),
   });
 
   // O IAGO é identificado pelo usuário vinculado na config da IA.
@@ -539,6 +557,15 @@ export default function AdminUsuarios() {
         <Card>
           <CardHeader className="flex flex-col md:flex-row md:items-center justify-between gap-4">
             <CardTitle>Usuários</CardTitle>
+            <div className="flex flex-col md:flex-row gap-2 w-full md:w-auto">
+            <Select value={filtroEquipe} onValueChange={(v: any) => setFiltroEquipe(v)}>
+              <SelectTrigger className="w-full md:w-[200px]"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="todos">Todas as equipes</SelectItem>
+                <SelectItem value="padrao">Meus operadores</SelectItem>
+                <SelectItem value="amaral">Equipe Thiago (Amaral)</SelectItem>
+              </SelectContent>
+            </Select>
             <div className="relative w-full md:w-64">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
@@ -547,6 +574,7 @@ export default function AdminUsuarios() {
                 onChange={(e) => setSearchTerm(e.target.value)}
                 className="pl-9"
               />
+            </div>
             </div>
           </CardHeader>
           <CardContent>
@@ -562,6 +590,7 @@ export default function AdminUsuarios() {
                     <TableHead>Email</TableHead>
                     <TableHead>Papel Atual</TableHead>
                     <TableHead>Novo Papel</TableHead>
+                    <TableHead>Equipe</TableHead>
                     <TableHead className="text-center">Status</TableHead>
                     <TableHead className="text-center">
                       <div className="flex items-center justify-center gap-1">
@@ -573,11 +602,14 @@ export default function AdminUsuarios() {
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {filteredUsers.map((user) => (
+                  {filteredUsers.filter((u) => filtroEquipe === 'todos' || u.equipe === filtroEquipe).map((user) => (
                     <TableRow key={user.id}>
                       <TableCell className="font-medium">
                         <span className="flex items-center gap-1.5">
                           {user.nome}
+                          {user.equipe === 'amaral' && (
+                            <Badge variant="outline" className="text-[10px]">Amaral</Badge>
+                          )}
                           {ehIago(user) && (
                             <Badge variant="secondary" className="text-[10px] gap-1">
                               <Bot className="h-3 w-3" /> IA
@@ -603,6 +635,21 @@ export default function AdminUsuarios() {
                             <SelectItem value="funcionario">Funcionário</SelectItem>
                             <SelectItem value="gestor">Gestor</SelectItem>
                             <SelectItem value="admin">Admin</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </TableCell>
+                      <TableCell>
+                        <Select
+                          value={user.equipe}
+                          onValueChange={(v) => equipeMutation.mutate({ userId: user.id, equipe: v })}
+                          disabled={equipeMutation.isPending}
+                        >
+                          <SelectTrigger className="w-[170px]">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="padrao">Souza e Ribeiro</SelectItem>
+                            <SelectItem value="amaral">Equipe Thiago (Amaral)</SelectItem>
                           </SelectContent>
                         </Select>
                       </TableCell>

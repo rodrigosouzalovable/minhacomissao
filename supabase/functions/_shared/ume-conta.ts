@@ -11,12 +11,13 @@ export const CONTA_UME_POR_PARCEIRO: Record<string, UmeConta> = {
   [THIAGO_NOGUEIRA_USER_ID]: 'amaral',
 };
 
-/** Conta pelo usuário (atendente/parceiro). Sem mapeamento ou sem a tag parceiro => padrão. */
+/** Conta pelo usuário: equipe marcada na aba Usuários (equipe_ume). Dono parceiro exige a tag parceiro. */
 export async function contaUmeDoUsuario(db: Db, userId: string | null | undefined): Promise<UmeConta> {
-  const conta = userId ? CONTA_UME_POR_PARCEIRO[userId] : undefined;
-  if (!conta) return 'padrao';
-  const { data } = await db.from('user_permissions').select('parceiro_meta').eq('user_id', userId).maybeSingle();
-  return data?.parceiro_meta === true ? conta : 'padrao';
+  if (!userId) return 'padrao';
+  const { data } = await db.from('user_permissions').select('parceiro_meta, equipe_ume').eq('user_id', userId).maybeSingle();
+  const dono = CONTA_UME_POR_PARCEIRO[userId];
+  if (dono) return data?.parceiro_meta === true ? dono : 'padrao';
+  return data?.equipe_ume === 'amaral' ? 'amaral' : 'padrao';
 }
 
 /** Conta pelo número que recebeu a conversa (IAGO): número de parceiro => conta do parceiro. */

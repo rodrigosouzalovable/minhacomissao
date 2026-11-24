@@ -3,7 +3,7 @@ import { umeClient, alvoConta, contaDe } from './ume-api.ts';
 import { contaUmeDoUsuario } from './ume-conta.ts';
 import { THIAGO_NOGUEIRA_USER_ID } from './thiago-meta-override.ts';
 
-const fakeDb = (parceiro: boolean) => ({ from: () => ({ select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: { parceiro_meta: parceiro } }) }) }) }) });
+const fakeDb = (parceiro: boolean, equipe = 'padrao') => ({ from: () => ({ select: () => ({ eq: () => ({ maybeSingle: async () => ({ data: { parceiro_meta: parceiro, equipe_ume: equipe } }) }) }) }) });
 
 Deno.test('conta padrão continua usando as credenciais da empresa', () => {
   for (const [k, v] of Object.entries({ UME_PRD_CLIENT_ID: 'empresa', UME_PRD_CLIENT_SECRET: 's', UME_PRD_USERNAME: 'u', UME_PRD_PASSWORD: 'p',
@@ -19,4 +19,10 @@ Deno.test('só o Thiago com a tag parceiro usa a conta Amaral', async () => {
   assertEquals(await contaUmeDoUsuario(fakeDb(false), THIAGO_NOGUEIRA_USER_ID), 'padrao');
   assertEquals(await contaUmeDoUsuario(fakeDb(true), 'ee649720-b8ce-47a2-859e-100a3a9ae6bb'), 'padrao');
   assertEquals(await contaUmeDoUsuario(fakeDb(true), null), 'padrao');
+});
+
+Deno.test('operador marcado na Equipe Thiago usa a conta Amaral; os demais a da empresa', async () => {
+  const op = 'ee649720-b8ce-47a2-859e-100a3a9ae6bb';
+  assertEquals(await contaUmeDoUsuario(fakeDb(false, 'amaral'), op), 'amaral');
+  assertEquals(await contaUmeDoUsuario(fakeDb(false, 'padrao'), op), 'padrao');
 });
