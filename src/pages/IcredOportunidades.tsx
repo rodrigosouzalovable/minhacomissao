@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { toast } from "sonner";
 import { Landmark, Loader2, Upload } from "lucide-react";
+import { IcredAtendimentoPanel } from "@/components/meta/IcredAtendimentoPanel";
 
 const STATUS = ["NOVO", "CONTATADO", "INTERESSADO", "PROPOSTA_DIGITADA", "PAGO", "DESINTERESSE"];
 const STATUS_L: Record<string, string> = {
@@ -101,6 +102,8 @@ export default function IcredOportunidades() {
             <p className="text-sm text-muted-foreground">FGTS e consignado da Única Promotora — importação, funil e acompanhamento.</p>
           </div>
         </div>
+
+        <IcredAtendimentoPanel />
 
         <Card>
           <CardHeader>

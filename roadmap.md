@@ -6,6 +6,7 @@
 - [x] Corrigir a localização protegida da conversa e pré-selecionar a ocorrência mais recente para envio do termo.
 
 # Roadmap
+- [x] Preparar caixa FGTS iCred, roteiro seguro e atalho no painel; caixa e roteiro conferidos no acesso real, dois testes passaram e IAGO desativado conforme escolha do usuário, sem campanhas ou novas rotinas.
 - [x] Repescagem automática da 1ª parcela (D+1 a D+3, 1/dia, nova_parcela_vencida_2) na rotina de recuperação das 09:30; testes passaram.
 - [x] Escala da campanha diária da carteira: corte de 1.000 clientes corrigido, Odres com 5 dias sem repetir, duas campanhas (UME/Odres) com números separados e complemento de hoje lançado; campanha recém-criada não encerra mais antes de gravar os contatos.
 - [x] Corrigir erro genérico do envio: recusa real HTTP 404 confirmada em número desativado; quatro testes passaram e aviso validado no navegador, compilação OK. Sem reativação ou mensagens reais; página autenticada redireciona para /novomundo, impedindo conferência completa pela conversa.

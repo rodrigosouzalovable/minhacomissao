@@ -1,4 +1,5 @@
 import { decidirParada } from '../_shared/vendas-encerramento.ts';
+import { estadoAtendimentoIcred } from '../_shared/icred-atendimento.ts';
 import { FOLDER_USA_B2B_INBOX, promptVendasUsa, FALLBACK_USA, FALLBACK_USA_EN, pareceIngles } from '../_shared/vendas-usa.ts';
 import { FOLDER_COBRANCA_B2B_INBOX, promptVendasCobranca, FALLBACK_COBRANCA } from '../_shared/vendas-cobranca.ts';
 import { notificarAdmin } from '../_shared/notificar-admin.ts';
@@ -104,6 +105,12 @@ Deno.serve(async (req) => {
       .eq('id', contato_id)
       .maybeSingle();
     if (!contato) return json({ success: false, error: 'contato não encontrado' }, 404);
+
+    // Explicit preparation-only boundary: never send, use AI or consult debt data here.
+    const estadoIcred = estadoAtendimentoIcred(contato.folder_id);
+    if (estadoIcred && !estadoIcred.ativo) {
+      return json({ success: true, skipped: estadoIcred.motivo });
+    }
 
     // Cadastral flow must never enter free-form AI or follow-up, even after acknowledgement.
     if (['recuperacao_cadastral', 'recuperacao_novo_mundo'].includes(String(contato.origem_aquecimento))) {

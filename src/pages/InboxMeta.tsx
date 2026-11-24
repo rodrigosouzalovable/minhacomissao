@@ -623,6 +623,30 @@ export default function InboxMeta() {
     await fetchFolders();
   }, [fetchFolders, refetchRole]);
 
+  // Deep links select only folders already returned by the viewer's RLS.
+  useEffect(() => {
+    if (!user || !padraoVerificado || caixasCarregando) return;
+    const params = new URLSearchParams(location.search);
+    const caixa = params.get('caixa');
+    if (!caixa) return;
+    if (folders.some(folder => folder.id === caixa)) {
+      escolhaManualFolderRef.current = true;
+      setCurrentFolderId(caixa);
+      setModoMeusClientes(false);
+      setContatoAtivo(null);
+      setBusca('');
+      setBuscaDebounced('');
+      setFiltroInstancia('todas');
+      setFiltroEtiqueta(new Set());
+      setFiltroLeitura('todas');
+      setAbaAtiva('conversas');
+    } else {
+      toast({ title: 'Caixa indisponível', description: 'Você não tem acesso a esta caixa.' });
+    }
+    params.delete('caixa');
+    navigate({ pathname: location.pathname, search: params.toString() ? `?${params.toString()}` : '' }, { replace: true });
+  }, [user, padraoVerificado, caixasCarregando, folders, location.pathname, location.search, navigate, toast]);
+
   const handleApagarCaixa = useCallback(async (folder: MetaInboxFolder) => {
     if (!window.confirm(`Tem certeza que deseja apagar a caixa "${folder.nome}"?\n\nAs conversas não serão excluídas, apenas voltarão para a caixa padrão.`)) return;
     const { data: apagadas, error } = await supabase
