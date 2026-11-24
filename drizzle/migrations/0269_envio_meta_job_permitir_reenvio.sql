@@ -1,0 +1,1 @@
+ALTER TABLE public.envio_meta_job ADD COLUMN IF NOT EXISTS permitir_reenvio_recente boolean NOT NULL DEFAULT false;

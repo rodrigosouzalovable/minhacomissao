@@ -548,6 +548,7 @@ Deno.serve(async (req) => {
         instancias_risco_aceito: instanciasRiscoAceito,
         bloqueados_blacklist: listaBlacklist,
         dias_antirrepeticao: diasAnti,
+        permitir_reenvio_recente: permitirReenvioRecente,
         ignorados_repetidos: listaRepetidos,
         custo_total_contatos: custo ? Math.max(0, Number(custo.total) || 0) : null,
         custo_cobrados: custo ? Math.max(0, Number(custo.cobrados) || 0) : null,

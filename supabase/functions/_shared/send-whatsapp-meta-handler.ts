@@ -518,7 +518,7 @@ export async function handleSendWhatsAppMeta(req: Request): Promise<Response> {
         status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
-    const { template_id, instancia_id, cliente: clienteRaw, user_id: requestedUserId, modo_teste, atendente_nome, ignorar_pausa_qualidade, folder_id, credor, liberacao_total_parceiro, manual_inbox, button_url, proativo } = requestBody;
+    const { template_id, instancia_id, cliente: clienteRaw, user_id: requestedUserId, modo_teste, atendente_nome, ignorar_pausa_qualidade, folder_id, credor, liberacao_total_parceiro, manual_inbox, button_url, proativo, ignorar_trava_diaria } = requestBody;
     const cliente = clienteRaw ? normalizeCliente(clienteRaw) : clienteRaw;
     if (cliente && typeof button_url === 'string' && button_url.trim()) {
       (cliente as any).button_url = button_url.trim();
@@ -816,7 +816,7 @@ export async function handleSendWhatsAppMeta(req: Request): Promise<Response> {
     // Bloqueios reais (pool/pausa/qualidade/horário/domingo) permanecem acima.
 
     // ===== Trava diária: 1 template proativo por telefone (sufixo) por dia BRT =====
-    const aplicaTrava = !isTeste && manual_inbox !== true && proativo !== false;
+    const aplicaTrava = !isTeste && manual_inbox !== true && proativo !== false && ignorar_trava_diaria !== true;
     if (aplicaTrava) {
       const { data: reservado, error: travaErr } = await supabase.rpc('reservar_envio_diario_telefone', {
         p_telefone: formatTelefone(cliente.telefone), p_instancia: inst.id, p_template: template.nome_template,

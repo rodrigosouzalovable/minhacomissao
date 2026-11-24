@@ -1884,6 +1884,13 @@
       "when": 1795548560228,
       "tag": "0268_icred_oportunidades",
       "breakpoints": true
+    },
+    {
+      "idx": 269,
+      "version": "7",
+      "when": 1795559317232,
+      "tag": "0269_envio_meta_job_permitir_reenvio",
+      "breakpoints": true
     }
   ]
 }

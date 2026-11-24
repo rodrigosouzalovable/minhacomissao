@@ -3095,6 +3095,7 @@ export type Database = {
           msgs_por_segundo: number
           nome_campanha: string | null
           permitir_qualidade_baixa: boolean
+          permitir_reenvio_recente: boolean
           proximo_em: string | null
           reabilitacao_checada_em: string | null
           saude_checada_em: string | null
@@ -3147,6 +3148,7 @@ export type Database = {
           msgs_por_segundo?: number
           nome_campanha?: string | null
           permitir_qualidade_baixa?: boolean
+          permitir_reenvio_recente?: boolean
           proximo_em?: string | null
           reabilitacao_checada_em?: string | null
           saude_checada_em?: string | null
@@ -3199,6 +3201,7 @@ export type Database = {
           msgs_por_segundo?: number
           nome_campanha?: string | null
           permitir_qualidade_baixa?: boolean
+          permitir_reenvio_recente?: boolean
           proximo_em?: string | null
           reabilitacao_checada_em?: string | null
           saude_checada_em?: string | null

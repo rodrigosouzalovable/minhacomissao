@@ -902,7 +902,7 @@ async function processarItem(job: any, opts: { ignorarProximoEm?: boolean } = {}
         'Content-Type': 'application/json',
         'Authorization': `Bearer ${Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')}`,
       },
-      body: JSON.stringify({ template_id: tplId, instancia_id: instId, cliente, user_id: job.user_id, folder_id: job.folder_id ?? null, atendente_nome: job.folder_id === '9267b296-24e6-425d-9f0e-0e4114c782d9' ? 'Clara Ribeiro de Souza' : undefined, credor: (pend as any).credor ?? job.credor ?? null, liberacao_total_parceiro: job.user_id === THIAGO_NOGUEIRA_USER_ID }),
+      body: JSON.stringify({ template_id: tplId, instancia_id: instId, cliente, user_id: job.user_id, folder_id: job.folder_id ?? null, atendente_nome: job.folder_id === '9267b296-24e6-425d-9f0e-0e4114c782d9' ? 'Clara Ribeiro de Souza' : undefined, credor: (pend as any).credor ?? job.credor ?? null, liberacao_total_parceiro: job.user_id === THIAGO_NOGUEIRA_USER_ID, ignorar_trava_diaria: job.permitir_reenvio_recente === true }),
     })).then((r) => r.json());
 
     if (sendResp?.tier_full || sendResp?.pool_blocked || sendResp?.pool_paused || sendResp?.bm_quota_blocked) {

@@ -301,6 +301,7 @@ async function enviarUm(item: any, job: any): Promise<SendResult> {
         folder_id: job.folder_id ?? null,
         credor: item.credor ?? job.credor ?? null,
         ignorar_pausa_qualidade: true,
+        ignorar_trava_diaria: job.permitir_reenvio_recente === true,
       }),
     }).then((r) => r.json());
 
