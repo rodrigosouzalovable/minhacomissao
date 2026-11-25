@@ -11,7 +11,11 @@ const DONO = 'ee649720-b8ce-47a2-859e-100a3a9ae6bb';
 const PASTA_USA = '7b3e9a10-4c2d-4f8e-9a61-0d5e2c8b1a47';
 const TEMPLATE = 'confirmar_recebimento_de_mensagem';
 const CIDADES = ['Orlando FL', 'Kissimmee FL', 'Miami FL', 'Pompano Beach FL', 'Deerfield Beach FL', 'Boca Raton FL',
-  'Fort Lauderdale FL', 'Tampa FL', 'Boston MA', 'Framingham MA', 'Newark NJ', 'Danbury CT', 'Atlanta GA', 'Houston TX'];
+  'Fort Lauderdale FL', 'Tampa FL', 'Boston MA', 'Framingham MA', 'Newark NJ', 'Danbury CT', 'Atlanta GA', 'Houston TX',
+  'Coral Springs FL', 'Davie FL', 'Doral FL', 'Sarasota FL', 'Jacksonville FL', 'Naples FL', 'Marietta GA', 'Somerville MA',
+  'Everett MA', 'Revere MA', 'Lowell MA', 'Hudson MA', 'Marlborough MA', 'Long Branch NJ', 'Elizabeth NJ', 'Kearny NJ',
+  'Mount Vernon NY', 'Queens NY', 'Bridgeport CT', 'Stamford CT', 'Philadelphia PA', 'Charlotte NC', 'Dallas TX',
+  'Los Angeles CA', 'San Diego CA'];
 const NICHOS = ['brazilian hair salon', 'brazilian beauty salon', 'brazilian nail salon', 'brazilian eyelash extensions',
   'brazilian waxing', 'brazilian house cleaning', 'brazilian cleaning services', 'brazilian handyman', 'brazilian painting contractor',
   'brazilian construction', 'brazilian auto detailing', 'brazilian auto repair', 'brazilian bakery', 'brazilian restaurant',
@@ -33,9 +37,8 @@ Deno.serve(async (req) => {
   const body = await req.json().catch(() => ({}));
   const { data: cfg } = await db.from('usa_b2b_config').select('*').eq('id', true).maybeSingle();
   if (!cfg?.ativo && body?.forcar !== true) return json({ success: true, pulado: 'rotina USA pausada' });
-  // Meta: ~300 WhatsApp reais/dia. ~70% dos números do Maps são fixos (sem WhatsApp e sem cobrança), então envia 3x.
-  const metaWhats = Math.min(1000, Math.max(1, Number(body?.limite) || cfg?.limite_dia || 300));
-  const limite = Math.min(1500, metaWhats * 3);
+  // limite_dia = quantidade de números novos na campanha do dia (padrão 1.000). Fixos sem WhatsApp não são cobrados.
+  const limite = Math.min(1500, Math.max(1, Number(body?.limite) || cfg?.limite_dia || 1000));
 
   // Quando roda: agora (cron das 10h BRT) ou agendado para a próxima 10:00 BRT (preparo na véspera).
   const agora = new Date();
@@ -65,13 +68,14 @@ Deno.serve(async (req) => {
   const { count: pend } = await db.from('usa_b2b_leads').select('id', { count: 'exact', head: true }).is('enviado_em', null);
   let faltam = limite - (pend || 0);
   let requisicoes = 0, captados = 0;
+  const inicio = Date.now();
   if (faltam > 0) {
     const chaves = (await listarChavesGoogleMaps(db)).filter(chavePodeBuscar);
     const combos = CIDADES.flatMap((c) => NICHOS.map((n) => `${n} in ${c}`)).sort(() => Math.random() - 0.5);
     outer: for (const q of combos) {
       let token: string | undefined;
       for (let pg = 0; pg < 3; pg++) {
-        if (faltam <= 0 || requisicoes >= 250 || !chaves.length) break outer;
+        if (faltam <= 0 || requisicoes >= 600 || Date.now() - inicio > 110_000 || !chaves.length) break outer;
         const r = await fetch('https://places.googleapis.com/v1/places:searchText', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'X-Goog-Api-Key': chaves[0].api_key,
@@ -117,7 +121,13 @@ Deno.serve(async (req) => {
   const nums = Object.keys(byInst).sort(() => Math.random() - 0.5).slice(0, 15);
   if (!nums.length) return json({ success: false, error: 'nenhum número GREEN com o modelo aprovado' }, 400);
 
-  const clientes = leads.map((l) => {
+  // Reserva atômica: duas execuções simultâneas nunca usam os mesmos contatos.
+  const { data: reservados } = await db.from('usa_b2b_leads').update({ enviado_em: new Date().toISOString() })
+    .in('id', leads.map((l) => l.id)).is('enviado_em', null).select('id');
+  const ok = new Set((reservados || []).map((r: any) => r.id));
+  const meus = leads.filter((l) => ok.has(l.id));
+  if (!meus.length) return json({ success: true, pulado: 'contatos já reservados por outra execução' });
+  const clientes = meus.map((l) => {
     const nome = `pessoal da ${l.nome || 'empresa'}`.slice(0, 60);
     return { telefone: l.telefone, nome, vars: { '1': nome } };
   });
@@ -131,9 +141,11 @@ Deno.serve(async (req) => {
     }),
   });
   const out = await resp.json().catch(() => ({}));
-  if (!resp.ok || out?.success === false) return json({ success: false, error: out?.error || `HTTP ${resp.status}`, captados }, 500);
-  await db.from('usa_b2b_leads').update({ enviado_em: new Date().toISOString(), job_id: out.job_id })
-    .in('id', leads.map((l) => l.id));
+  if (!resp.ok || out?.success === false) {
+    await db.from('usa_b2b_leads').update({ enviado_em: null }).in('id', meus.map((l) => l.id));
+    return json({ success: false, error: out?.error || `HTTP ${resp.status}`, captados }, 500);
+  }
+  await db.from('usa_b2b_leads').update({ job_id: out.job_id }).in('id', meus.map((l) => l.id));
   console.log('[usa-b2b-diario]', JSON.stringify({ captados, requisicoes, clientes: clientes.length, job: out.job_id, alvo }));
   return json({ success: true, job_id: out.job_id, clientes: clientes.length, captados, requisicoes, envio_em: alvo.toISOString(), numeros: nums.length });
 });
