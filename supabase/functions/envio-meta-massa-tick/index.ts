@@ -152,7 +152,7 @@ function proximaReavaliacao(): string {
   const aberturaUtc = abertura.getTime() + offsetMs;
   // Dentro da janela do dia: reavalia em 5min. Fora dela: espera a abertura.
   const hh = nowBrt.getHours() + nowBrt.getMinutes() / 60;
-  const dentroJanela = nowBrt.getDay() !== 0 && hh >= 8 && hh < 19;
+  const dentroJanela = nowBrt.getDay() !== 0 && hh >= 8 && hh < 20;
   const alvo = dentroJanela ? Math.min(emBreve, aberturaUtc) : aberturaUtc;
   return new Date(alvo).toISOString();
 }
