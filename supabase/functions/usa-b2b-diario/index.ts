@@ -12,10 +12,10 @@ const PASTA_USA = '7b3e9a10-4c2d-4f8e-9a61-0d5e2c8b1a47';
 const TEMPLATE = 'confirmar_recebimento_de_mensagem';
 const CIDADES = ['Orlando FL', 'Kissimmee FL', 'Miami FL', 'Pompano Beach FL', 'Deerfield Beach FL', 'Boca Raton FL',
   'Fort Lauderdale FL', 'Tampa FL', 'Boston MA', 'Framingham MA', 'Newark NJ', 'Danbury CT', 'Atlanta GA', 'Houston TX'];
-const NICHOS = ['brazilian restaurant', 'brazilian bakery', 'brazilian market', 'brazilian hair salon', 'brazilian cleaning services',
-  'brazilian steakhouse', 'brazilian beauty salon', 'brazilian nail salon', 'brazilian construction', 'brazilian auto repair',
-  'brazilian dentist', 'brazilian immigration services', 'brazilian real estate', 'brazilian moving company', 'brazilian church store',
-  'açaí brazilian', 'brazilian waxing', 'brazilian accountant'];
+const NICHOS = ['brazilian hair salon', 'brazilian beauty salon', 'brazilian nail salon', 'brazilian eyelash extensions',
+  'brazilian waxing', 'brazilian house cleaning', 'brazilian cleaning services', 'brazilian handyman', 'brazilian painting contractor',
+  'brazilian construction', 'brazilian auto detailing', 'brazilian auto repair', 'brazilian bakery', 'brazilian restaurant',
+  'brazilian market', 'açaí brazilian', 'brazilian moving company', 'brazilian landscaping'];
 const json = (p: unknown, s = 200) => new Response(JSON.stringify(p), { status: s, headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
 
 function telUsa(p: any): string | null {
@@ -75,7 +75,7 @@ Deno.serve(async (req) => {
         const r = await fetch('https://places.googleapis.com/v1/places:searchText', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'X-Goog-Api-Key': chaves[0].api_key,
-            'X-Goog-FieldMask': 'places.id,places.displayName,places.internationalPhoneNumber,places.formattedAddress,nextPageToken' },
+            'X-Goog-FieldMask': 'places.id,places.displayName,places.internationalPhoneNumber,places.formattedAddress,places.websiteUri,nextPageToken' },
           body: JSON.stringify({ textQuery: q, languageCode: 'en', regionCode: 'US', pageSize: 20, ...(token ? { pageToken: token } : {}) }),
         });
         requisicoes++;
@@ -85,7 +85,7 @@ Deno.serve(async (req) => {
         const rows = [];
         for (const p of d.places || []) {
           const t = telUsa(p);
-          if (!t || vistos.has(t.slice(-10))) continue;
+          if (!t || p.websiteUri || vistos.has(t.slice(-10))) continue; // só empresas SEM site
           vistos.add(t.slice(-10));
           rows.push({ telefone: t, nome: String(p.displayName?.text || '').slice(0, 120), place_id: p.id,
             cidade: q.split(' in ')[1], nicho: q.split(' in ')[0] });
