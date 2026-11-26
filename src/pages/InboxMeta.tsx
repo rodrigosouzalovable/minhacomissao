@@ -68,6 +68,7 @@ import { MetaInstanceHealthBanner } from '@/components/inbox/meta/MetaInstanceHe
 import { MetaPoolReactivation } from '@/components/inbox/meta/MetaPoolReactivation';
 import { useUserPermissions } from '@/hooks/useUserPermissions';
 import { MetaConversationCost } from '@/components/inbox/meta/MetaConversationCost';
+import { PromptSiteLovableButton } from '@/components/inbox/meta/PromptSiteLovableDialog';
 import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
@@ -2762,6 +2763,9 @@ export default function InboxMeta() {
                       {traduzindoConversa ? <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" /> : <Languages className="h-3.5 w-3.5 mr-1" />}
                       {traducaoVisivel ? 'Ocultar tradução' : 'Traduzir conversa'}
                     </Button>
+                  )}
+                  {ehCaixaUsa && (
+                    <PromptSiteLovableButton telefone={contatoAtivo.telefone || ''} nomeContato={contatoAtivo.nome || ''} />
                   )}
                   {contatoAtivo.folder_id == null && (
                     <MetaConversationCost
