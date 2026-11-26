@@ -172,8 +172,13 @@ async function comFallback(alvo: UmeAlvo, f: (a: UmeAlvo) => Promise<UmeResposta
     if (String((e as Error)?.message) !== 'ume_login_expirado') throw e;
     console.warn('[ume-api] login do atendente expirado');
   }
-  // Volta sempre para a conta do próprio alvo (parceiro nunca cai na conta da empresa).
-  return f(alvoConta(alvo.amb, contaDe(alvo)));
+  // Volta para a conta do próprio alvo; se a conta do parceiro também for recusada
+  // (contrato de outra loja), emite pela conta da assessoria mantendo o operador no corpo.
+  const conta = contaDe(alvo);
+  const r2 = await f(alvoConta(alvo.amb, conta));
+  if (conta === 'padrao' || (r2.status !== 401 && r2.status !== 403)) return r2;
+  console.warn('[ume-api] conta do parceiro recusada, usando a assessoria', r2.status);
+  return f(alvoConta(alvo.amb, 'padrao'));
 }
 
 export interface UmeRenegociacao {
