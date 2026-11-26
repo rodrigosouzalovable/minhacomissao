@@ -122,9 +122,15 @@ Deno.serve(async (req) => {
   if (!nums.length) return json({ success: false, error: 'nenhum número GREEN com o modelo aprovado' }, 400);
 
   // Reserva atômica: duas execuções simultâneas nunca usam os mesmos contatos.
-  const { data: reservados } = await db.from('usa_b2b_leads').update({ enviado_em: new Date().toISOString() })
-    .in('id', leads.map((l) => l.id)).is('enviado_em', null).select('id');
-  const ok = new Set((reservados || []).map((r: any) => r.id));
+  // Lotes de 100 IDs: listas grandes estouram o limite de tamanho da URL.
+  const lotes = (ids: string[]) => Array.from({ length: Math.ceil(ids.length / 100) }, (_, i) => ids.slice(i * 100, i * 100 + 100));
+  const reservados: any[] = [];
+  const reservaEm = new Date().toISOString();
+  for (const lote of lotes(leads.map((l) => l.id))) {
+    const { data } = await db.from('usa_b2b_leads').update({ enviado_em: reservaEm }).in('id', lote).is('enviado_em', null).select('id');
+    reservados.push(...(data || []));
+  }
+  const ok = new Set(reservados.map((r: any) => r.id));
   const meus = leads.filter((l) => ok.has(l.id));
   if (!meus.length) return json({ success: true, pulado: 'contatos já reservados por outra execução' });
   const clientes = meus.map((l) => {
@@ -142,10 +148,10 @@ Deno.serve(async (req) => {
   });
   const out = await resp.json().catch(() => ({}));
   if (!resp.ok || out?.success === false) {
-    await db.from('usa_b2b_leads').update({ enviado_em: null }).in('id', meus.map((l) => l.id));
+    for (const lote of lotes(meus.map((l) => l.id))) await db.from('usa_b2b_leads').update({ enviado_em: null }).in('id', lote);
     return json({ success: false, error: out?.error || `HTTP ${resp.status}`, captados }, 500);
   }
-  await db.from('usa_b2b_leads').update({ job_id: out.job_id }).in('id', meus.map((l) => l.id));
+  for (const lote of lotes(meus.map((l) => l.id))) await db.from('usa_b2b_leads').update({ job_id: out.job_id }).in('id', lote);
   console.log('[usa-b2b-diario]', JSON.stringify({ captados, requisicoes, clientes: clientes.length, job: out.job_id, alvo }));
   return json({ success: true, job_id: out.job_id, clientes: clientes.length, captados, requisicoes, envio_em: alvo.toISOString(), numeros: nums.length });
 });
