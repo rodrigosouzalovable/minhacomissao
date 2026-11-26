@@ -1898,6 +1898,13 @@
       "when": 1795560439641,
       "tag": "0270_user_permissions_equipe_ume",
       "breakpoints": true
+    },
+    {
+      "idx": 271,
+      "version": "7",
+      "when": 1795696699471,
+      "tag": "0271_teto_parcelas_caixa_e_prioridade_pix",
+      "breakpoints": true
     }
   ]
 }

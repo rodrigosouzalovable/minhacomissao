@@ -8180,6 +8180,7 @@ export type Database = {
           nome: string | null
           nome_perfil: string | null
           origem_aquecimento: string | null
+          prioridade_pagamento_em: string | null
           sla_dispensado_em: string | null
           telefone: string | null
           telefone_busca_invertido: string | null
@@ -8210,6 +8211,7 @@ export type Database = {
           nome?: string | null
           nome_perfil?: string | null
           origem_aquecimento?: string | null
+          prioridade_pagamento_em?: string | null
           sla_dispensado_em?: string | null
           telefone?: string | null
           telefone_busca_invertido?: string | null
@@ -8240,6 +8242,7 @@ export type Database = {
           nome?: string | null
           nome_perfil?: string | null
           origem_aquecimento?: string | null
+          prioridade_pagamento_em?: string | null
           sla_dispensado_em?: string | null
           telefone?: string | null
           telefone_busca_invertido?: string | null
@@ -11130,6 +11133,27 @@ export type Database = {
           refresh_token?: string | null
           ume_username?: string
           user_id?: string
+        }
+        Relationships: []
+      }
+      ume_teto_parcelas_caixa: {
+        Row: {
+          atualizado_por: string | null
+          caixa: string
+          max_parcelas: number
+          updated_at: string
+        }
+        Insert: {
+          atualizado_por?: string | null
+          caixa: string
+          max_parcelas?: number
+          updated_at?: string
+        }
+        Update: {
+          atualizado_por?: string | null
+          caixa?: string
+          max_parcelas?: number
+          updated_at?: string
         }
         Relationships: []
       }
@@ -14876,6 +14900,10 @@ export type Database = {
       pode_alterar_credor_acordo:
         | { Args: never; Returns: boolean }
         | { Args: { p_acordo_id: string }; Returns: boolean }
+      pode_gerir_teto_caixa: {
+        Args: { _caixa: string; _uid: string }
+        Returns: boolean
+      }
       pode_google_maps_leads: { Args: { _user_id: string }; Returns: boolean }
       pode_marcar_pago_global: { Args: { _uid: string }; Returns: boolean }
       pode_ver_campanha_meta: { Args: { _job_id: string }; Returns: boolean }

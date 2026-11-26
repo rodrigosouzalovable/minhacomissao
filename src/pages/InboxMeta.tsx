@@ -98,7 +98,7 @@ interface MetaContato {
   ultima_mensagem: string | null; ultima_mensagem_em: string | null;
   ultima_msg_entrada_em: string | null; nao_lido: number;
   sla_dispensado_em?: string | null;
-  fixado: boolean; arquivado: boolean;
+  fixado: boolean; arquivado: boolean; prioridade_pagamento_em?: string | null;
   // Meta 2026 — WhatsApp Username + BSUID
   bsuid?: string | null;
   whatsapp_username?: string | null;
@@ -862,7 +862,7 @@ export default function InboxMeta() {
 
     let cancelado = false;
     void (async () => {
-      const cols = 'id, instancia_id, telefone, nome, nome_perfil, cpf, ultima_mensagem, ultima_mensagem_em, ultima_msg_entrada_em, sla_dispensado_em, nao_lido, fixado, arquivado, folder_id, credor';
+      const cols = 'id, instancia_id, telefone, nome, nome_perfil, cpf, ultima_mensagem, ultima_mensagem_em, ultima_msg_entrada_em, sla_dispensado_em, nao_lido, fixado, arquivado, folder_id, credor, prioridade_pagamento_em';
       let q = supabase.from('meta_whatsapp_contatos').select(cols).limit(1);
       if (contatoId) {
         q = q.eq('id', contatoId);
@@ -902,7 +902,7 @@ export default function InboxMeta() {
   const fetchContatos = useCallback(async () => {
     if (!user) return;
     const request = ++contatosRequestRef.current;
-    const selectCols = 'id, instancia_id, telefone, nome, nome_perfil, cpf, ultima_mensagem, ultima_mensagem_em, ultima_msg_entrada_em, sla_dispensado_em, nao_lido, fixado, arquivado, folder_id, credor';
+    const selectCols = 'id, instancia_id, telefone, nome, nome_perfil, cpf, ultima_mensagem, ultima_mensagem_em, ultima_msg_entrada_em, sla_dispensado_em, nao_lido, fixado, arquivado, folder_id, credor, prioridade_pagamento_em';
 
     const phoneSuffix = inboxPhoneSearch(buscaDebounced);
     if (phoneSuffix) {
@@ -1385,6 +1385,8 @@ export default function InboxMeta() {
           return tb - ta;
         }
 
+        const prio = (c: MetaContato) => (currentFolderId === null && c.prioridade_pagamento_em ? 1 : 0);
+        if (prio(a) !== prio(b)) return prio(b) - prio(a);
         const rank = (c: MetaContato) => (c.fixado ? 0 : 1);
         const ra = rank(a), rb = rank(b);
         if (ra !== rb) return ra - rb;
@@ -1415,7 +1417,7 @@ export default function InboxMeta() {
         const tb = b.ultima_mensagem_em ? new Date(b.ultima_mensagem_em).getTime() : 0;
         return tb - ta;
       });
-  }, [contatos, busca, buscaTelefoneGlobal, filtroEtiqueta, contatoEtiquetas, filtroLeitura, nomesCRM, filtroJanela24h, modoMeusClientes, mcMarcadores, filtroQualifs, qualifPorContato, nowTick, instancias, alertaEsperaAtivoNaCaixa, isCaixaAquecimento, separarCampanhas]);
+  }, [contatos, busca, buscaTelefoneGlobal, filtroEtiqueta, contatoEtiquetas, filtroLeitura, nomesCRM, filtroJanela24h, modoMeusClientes, mcMarcadores, filtroQualifs, qualifPorContato, nowTick, instancias, alertaEsperaAtivoNaCaixa, isCaixaAquecimento, separarCampanhas, currentFolderId]);
 
 
   // Exportar "Meus Clientes" para Excel (telefones + marcadores)
@@ -2568,6 +2570,9 @@ export default function InboxMeta() {
                       )}>
                         {selMultipla && (sel ? <CheckSquare className="h-3.5 w-3.5 text-primary shrink-0" /> : <Square className="h-3.5 w-3.5 text-muted-foreground shrink-0" />)}
                         {c.fixado && <Pin className="h-3 w-3 text-amber-500 shrink-0" />}
+                        {currentFolderId === null && c.prioridade_pagamento_em && (
+                          <Badge className="text-[9px] py-0 h-4 px-1 shrink-0">⚡ PIX/BOLETO</Badge>
+                        )}
                         <span className="truncate">{nomeExibido(c) || (c.telefone ? formatTelefone(c.telefone) : (c.whatsapp_username ? `@${c.whatsapp_username}` : 'Sem telefone'))}</span>
                         {!c.telefone && c.bsuid && <Badge variant="outline" className="text-[9px] py-0 h-3.5 px-1 shrink-0">BSUID</Badge>}
                         {c.arquivado && abaAtiva !== 'arquivados' && (
@@ -3319,6 +3324,8 @@ export default function InboxMeta() {
         onOpenChange={setConsultaUmeOpen}
         cpfInicial={cpfDoContato ?? null}
         onEnviar={(texto) => { void enviar(texto); }}
+        folderId={currentFolderId}
+        podeDefinirTeto={currentFolderId === null ? isAdmin : podeAdministrarCaixaAtual}
       />
       {contatoAtivo && (
         <AgendarRetornoDialog

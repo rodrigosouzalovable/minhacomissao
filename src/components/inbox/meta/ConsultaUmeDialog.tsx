@@ -135,7 +135,16 @@ function tabelaSemJuros10(c: Consulta): Tabela | null {
   };
 }
 
+/** Teto de parcelas da caixa atual (definido pelo gestor da caixa). */
+let tetoParcelasCaixa = 18;
+
 function tabelaDe(c: Consulta, tabela: TabelaKey): Tabela | null {
+  const base = tabelaDeSemTeto(c, tabela);
+  if (!base) return base;
+  return { ...base, parcelas: base.parcelas.filter((p) => p.parcelas <= tetoParcelasCaixa) };
+}
+
+function tabelaDeSemTeto(c: Consulta, tabela: TabelaKey): Tabela | null {
   if (tabela === 'sem_juros_10') return tabelaSemJuros10(c);
   const t = tabela === 'especial' ? c.especial : c.padrao;
   if (!t || t.parcelas.length === 0) return t;
@@ -173,12 +182,40 @@ export function ConsultaUmeDialog({
   onOpenChange,
   cpfInicial,
   onEnviar,
+  folderId = null,
+  podeDefinirTeto = false,
 }: {
   open: boolean;
   onOpenChange: (v: boolean) => void;
   cpfInicial?: string | null;
   onEnviar?: (texto: string) => void;
+  folderId?: string | null;
+  podeDefinirTeto?: boolean;
 }) {
+  const caixaTeto = folderId ?? 'padrao';
+  const [teto, setTeto] = useState(18);
+  const [tetoEdit, setTetoEdit] = useState('18');
+  const [salvandoTeto, setSalvandoTeto] = useState(false);
+  tetoParcelasCaixa = teto;
+  useEffect(() => {
+    if (!open) return;
+    let ativo = true;
+    void (supabase as any).from('ume_teto_parcelas_caixa').select('max_parcelas').eq('caixa', caixaTeto).maybeSingle()
+      .then(({ data }: any) => { if (!ativo) return; const n = Number(data?.max_parcelas) || 18; setTeto(n); setTetoEdit(String(n)); });
+    return () => { ativo = false; };
+  }, [open, caixaTeto]);
+  const salvarTeto = async () => {
+    const n = Math.round(Number(tetoEdit));
+    if (!Number.isFinite(n) || n < 1 || n > 18) { toast.error('Informe um número entre 1 e 18'); return; }
+    setSalvandoTeto(true);
+    const { data: u } = await supabase.auth.getUser();
+    const { error } = await (supabase as any).from('ume_teto_parcelas_caixa')
+      .upsert({ caixa: caixaTeto, max_parcelas: n, atualizado_por: u.user?.id ?? null, updated_at: new Date().toISOString() });
+    setSalvandoTeto(false);
+    if (error) { toast.error('Sem permissão para alterar o teto desta caixa'); return; }
+    setTeto(n);
+    toast.success(`Teto da caixa definido em ${n}x`);
+  };
   const [cpf, setCpf] = useState('');
   const [sessaoUme, setSessaoUme] = useState<SessaoUmeAtendente | null>(null);
   const semLogin = !sessaoUme;
@@ -388,6 +425,19 @@ export function ConsultaUmeDialog({
         <DialogHeader>
           <DialogTitle>Consulta UME — calculadora de desconto</DialogTitle>
         </DialogHeader>
+        {podeDefinirTeto ? (
+          <div className="flex flex-wrap items-center gap-2 rounded-md border p-2 text-sm">
+            <span className="font-medium">Máximo de parcelas desta caixa:</span>
+            <Input type="number" min={1} max={18} value={tetoEdit} onChange={(e) => setTetoEdit(e.target.value)} className="h-8 w-20" />
+            <span className="text-muted-foreground">x</span>
+            <Button size="sm" variant="outline" disabled={salvandoTeto || Number(tetoEdit) === teto} onClick={() => void salvarTeto()}>
+              {salvandoTeto ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Salvar'}
+            </Button>
+            <span className="text-xs text-muted-foreground">Os atendentes desta caixa só calculam até esse limite.</span>
+          </div>
+        ) : teto < 18 ? (
+          <p className="text-xs text-muted-foreground">Parcelamento liberado nesta caixa: até {teto}x.</p>
+        ) : null}
 
         <UmeLoginBox open={open} sessao={sessaoUme} onSessao={setSessaoUme} />
 
