@@ -129,7 +129,8 @@ export const navItems: NavItem[] = [
   { href: '/modelo-mensagem', label: 'Modelo Mensagem', icon: MessageSquareText },
   { href: '/admin/cotacoes', label: 'Cotações', icon: Coins, adminOnly: true },
   { href: '/admin/lembrete-meta', label: 'Lembrete Meta', icon: Bell, adminOnly: true },
-  { href: '/admin/calculadora-ume', label: 'Calculadora UME', icon: FileSpreadsheet, adminOnly: true },
+  { href: '/calculadora-ume', label: 'Calculadora UME', icon: Coins },
+  { href: '/admin/calculadora-ume', label: 'Calculadora UME (lote)', icon: FileSpreadsheet, adminOnly: true },
   { href: '/admin/google-maps-leads', label: 'Google Maps Leads', icon: MapPin, adminOnly: true },
   { href: '/cliente-usa', label: 'AI Assistant (USA)', icon: Clapperboard },
   { href: '/admin/icred', label: 'iCred FGTS', icon: Coins, adminOnly: true },
@@ -348,6 +349,8 @@ export function AppLayout({ children }: AppLayoutProps) {
 
   // Filter nav items based on role
   const filteredNavItems = navItems.filter((item) => {
+    // Calculadora UME avulsa: todos os atendentes da equipe (exceto clientes USA).
+    if (item.href === '/calculadora-ume') return isAdmin || !abasPermitidas?.includes('/cliente-usa');
     // Administradores globais mantêm acesso completo.
     // Admin com lista de abas salva vê só as marcadas (Usuários sempre visível).
     if (isAdmin) {

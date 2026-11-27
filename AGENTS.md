@@ -71,3 +71,4 @@
 - iCred FGTS/consignado opportunities live in icred_oportunidades (admin-only RLS, unique CPF+product) and the iCred credential stays server-side as ICRED_CLIENT_ID, because the API documentation is still password-protected and calls must never expose the key.
 - iCred Inbox uses a pure shared identity/preparation gate and a separate credit script; the IAGO entrypoint exits before debt lookups or replies while inactive, preventing unapproved spending and cross-domain debt disclosure.
 - USA language repair uses a pure incoming-message resolver and local translated offer, bypassing only the recent-response interval; opt-outs, deduplication and response caps stay intact to avoid extra AI calls or unsolicited retries.
+- Standalone UME calculator (/calculadora-ume) is visible to every staff user (not tab-gated, hidden from USA trial clients) and reuses ConsultaUmeDialog without onEnviar, using the PADRÃO box ceiling, so behaviour matches the Inbox calculator.

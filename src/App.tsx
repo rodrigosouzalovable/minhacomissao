@@ -81,6 +81,7 @@ const ProspeccaoB2B = lazy(() => retryImport(() => import("./pages/ProspeccaoB2B
 const PontoAdmin = lazy(() => retryImport(() => import("./pages/PontoAdmin")));
 const Blacklist = lazy(() => retryImport(() => import("./pages/Blacklist")));
 const AdminDominios = lazy(() => retryImport(() => import("./pages/AdminDominios")));
+const CalculadoraAtendimento = lazy(() => retryImport(() => import("./pages/CalculadoraAtendimento")));
 const CalculadoraUme = lazy(() => retryImport(() => import("./pages/CalculadoraUme")));
 const MeusSites = lazy(() => retryImport(() => import("./pages/MeusSites")));
 const CampanhasMeta = lazy(() => retryImport(() => import("./pages/CampanhasMeta")));
@@ -321,6 +322,7 @@ const App = () => (
             <Route path="/admin/ponto" element={<AdminRoute><PontoAdmin /></AdminRoute>} />
              <Route path="/admin/blacklist" element={<PermissionRoute><Blacklist /></PermissionRoute>} />
               <Route path="/admin/dominios" element={<AdminRoute><AdminDominios /></AdminRoute>} />
+              <Route path="/calculadora-ume" element={<ProtectedRoute><CalculadoraAtendimento /></ProtectedRoute>} />
               <Route path="/admin/calculadora-ume" element={<AdminRoute><CalculadoraUme /></AdminRoute>} />
               <Route path="/admin/meus-sites" element={<PermissionRoute><MeusSites /></PermissionRoute>} />
 
