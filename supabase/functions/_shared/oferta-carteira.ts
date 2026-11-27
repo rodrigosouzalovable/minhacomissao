@@ -28,8 +28,21 @@ export function textoOferta(credor: 'ume' | 'odres_cred', principal: number, mes
 }
 
 // Variável {{2}} do modelo odres_desbloqueio_aparelho_pix ("Condição disponível: {{2}}.").
+// À vista + até 5 opções de parcelamento distribuídas até o máximo permitido, em linha única.
+export function opcoesParcelas(maximo: number, quantidade = 5): number[] {
+  if (maximo < 2) return [];
+  if (maximo - 1 <= quantidade) return Array.from({ length: maximo - 1 }, (_, i) => i + 2);
+  const set = new Set<number>();
+  for (let k = 1; k <= quantidade; k++) set.add(Math.max(2, Math.round((maximo * k) / quantidade)));
+  return [...set].sort((a, b) => a - b);
+}
+
 export function textoCondicaoOdres(principal: number): string {
   const o = calcularOferta(principal);
   const avista = `à vista por R$ ${brl(o.avista)}`;
-  return o.parcelas >= 2 ? `${avista} ou ${o.parcelas}x de R$ ${brl(o.valorParcela)}` : avista;
+  if (o.parcelas < 2) return avista;
+  const total = o.avista * (1 + ACRESCIMO_PARCELADO);
+  const linhas = opcoesParcelas(o.parcelas).map((n) => `• ${n}x de R$ ${brl(Math.round((total / n) * 100) / 100)}`);
+  // A Meta recusa variáveis com quebra de linha (erro 132018): marcadores na mesma linha.
+  return `${avista} ou parcelado: ${linhas.join(' ')}`;
 }
