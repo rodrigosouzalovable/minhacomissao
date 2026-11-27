@@ -9,13 +9,14 @@ import { requireCaller } from '../_shared/auth-guard.ts';
 import { textoCondicaoOdres, textoOferta } from '../_shared/oferta-carteira.ts';
 import { dividirNumeros } from '../_shared/carteira-divisao.ts';
 import { semInstanciasSoLembrete } from '../_shared/instancias-so-lembrete.ts';
+import { ODRES_TEMPLATE_NOVO, podeUsarNovoTemplateOdres } from '../_shared/odres-template.ts';
 
 const DONO = 'ee649720-b8ce-47a2-859e-100a3a9ae6bb';
 const INICIO = '2026-11-14';
 const NOME = 'Carteira SFTP auto';
 const TEMPLATES = { ume: 'acesse_o_portal_de_negociacao', odres_cred: 'odres_portal_de_negociacao' } as const;
-// Modelo novo da Odres: usado em cada número que já o tem aprovado; os demais seguem no antigo.
-const ODRES_NOVO = 'odres_desbloqueio_aparelho_pix';
+// Troca somente a partir de 28/11 BRT, com cópias aprovadas como Utility.
+const ODRES_NOVO = ODRES_TEMPLATE_NOVO;
 const LIMITE = { ume: 4000, odres_cred: 6000 };
 // Dias sem repetir por credor. Odres em 5 dias para preencher o lote (com 7 dias a base livre não chega a 4.000).
 const DIAS_FADIGA = { ume: 7, odres_cred: 5 };
@@ -109,7 +110,7 @@ Deno.serve(async (req) => {
   }
   // Com pelo menos 3 números aptos, a campanha da Odres usa só o modelo novo (texto da condição próprio);
   // até lá continua no modelo antigo, para nunca falhar por falta de aprovação.
-  const usarOdresNovo = Object.keys(odresNovo).filter((i) => por.ume[i]).length >= 3;
+  const usarOdresNovo = podeUsarNovoTemplateOdres(hoje, Object.keys(odresNovo).filter((i) => por.ume[i]).length);
   if (usarOdresNovo) {
     por.odres_cred = Object.fromEntries(Object.entries(odresNovo).filter(([i]) => por.ume[i]));
     for (const c of clientes) if (c.credor === 'odres_cred') c.vars['2'] = textoCondicaoOdres(c.saldo);

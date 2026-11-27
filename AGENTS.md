@@ -1,4 +1,5 @@
 # Decisões técnicas
+- Odres automatic campaign template changes use a tested BRT activation date and approved Utility copies, preserving fallback and already-created campaigns to prevent premature or unapproved sends.
 - Meta recipient imports use quoted record serialization and explicit column roles; multiline variables never define recipient boundaries or standard fields.
 
 <!-- LOVABLE:BEGIN -->

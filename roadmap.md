@@ -6,6 +6,7 @@
 - [x] Corrigir a localização protegida da conversa e pré-selecionar a ocorrência mais recente para envio do termo.
 
 # Roadmap
+- [x] Configurar odres_notificacao_desbloqueio_pix_4 nas novas campanhas Odres desde 28/11 BRT com pelo menos 3 remetentes Utility aprovados; distribuição priorizada, duas funções publicadas e 10 testes passaram. Hoje: 1 cópia aprovada apta e 16 pendentes; troca aguarda as aprovações da Meta, sem disparos hoje.
 - [x] Corrigir idioma do IAGO USA B2B: 17 testes passaram e função publicada; templates em inglês preparados para cadastro manual, sem trocar campanhas nem enviar resposta retroativa. Envio real ao cliente não testado.
 - [x] Preparar caixa FGTS iCred, roteiro seguro e atalho no painel; caixa e roteiro conferidos no acesso real, dois testes passaram e IAGO desativado conforme escolha do usuário, sem campanhas ou novas rotinas.
 - [x] Repescagem automática da 1ª parcela (D+1 a D+3, 1/dia, nova_parcela_vencida_2) na rotina de recuperação das 09:30; testes passaram.
