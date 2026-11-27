@@ -9,7 +9,8 @@ import { semInstanciasSoLembrete } from '../_shared/instancias-so-lembrete.ts';
 
 const DONO = 'ee649720-b8ce-47a2-859e-100a3a9ae6bb';
 const PASTA_USA = '7b3e9a10-4c2d-4f8e-9a61-0d5e2c8b1a47';
-const TEMPLATE = 'confirmar_recebimento_de_mensagem';
+const TEMPLATE_EN = 'confirm_previous_message_en';
+const TEMPLATE_PT = 'confirmar_recebimento_de_mensagem';
 const CIDADES = ['Orlando FL', 'Kissimmee FL', 'Miami FL', 'Pompano Beach FL', 'Deerfield Beach FL', 'Boca Raton FL',
   'Fort Lauderdale FL', 'Tampa FL', 'Boston MA', 'Framingham MA', 'Newark NJ', 'Danbury CT', 'Atlanta GA', 'Houston TX',
   'Coral Springs FL', 'Davie FL', 'Doral FL', 'Sarasota FL', 'Jacksonville FL', 'Naples FL', 'Marietta GA', 'Somerville MA',
@@ -38,7 +39,7 @@ Deno.serve(async (req) => {
   const { data: cfg } = await db.from('usa_b2b_config').select('*').eq('id', true).maybeSingle();
   if (!cfg?.ativo && body?.forcar !== true) return json({ success: true, pulado: 'rotina USA pausada' });
   // limite_dia = quantidade de números novos na campanha do dia (padrão 1.000). Fixos sem WhatsApp não são cobrados.
-  const limite = Math.min(1500, Math.max(1, Number(body?.limite) || cfg?.limite_dia || 1000));
+  const limite = Math.min(2500, Math.max(1, Number(body?.limite) || cfg?.limite_dia || 1000));
 
   // Quando roda: agora (cron das 10h BRT) ou agendado para a próxima 10:00 BRT (preparo na véspera).
   const agora = new Date();
@@ -113,12 +114,20 @@ Deno.serve(async (req) => {
     .eq('user_id', DONO).eq('ativo', true).eq('saude_status', 'CONNECTED').eq('saude_quality', 'GREEN')
     .eq('estado_pool', 'ativo').eq('instancia_teste_aquecimento', false);
   const ids = semInstanciasSoLembrete((inst || []).map((i: any) => i.id));
-  const { data: tpls } = await db.from('meta_whatsapp_templates').select('id,instancia_id')
-    .in('instancia_id', ids.length ? ids : ['00000000-0000-0000-0000-000000000000'])
-    .eq('nome_template', TEMPLATE).eq('status', 'approved').ilike('categoria', 'utility');
-  const byInst: Record<string, string> = {};
-  for (const t of tpls || []) byInst[t.instancia_id] = t.id;
-  const nums = Object.keys(byInst).sort(() => Math.random() - 0.5).slice(0, 15);
+  // Prefere o modelo em inglês; usa o português só se nenhum número tiver o inglês aprovado.
+  const buscar = async (nome: string) => {
+    const { data: tpls } = await db.from('meta_whatsapp_templates').select('id,instancia_id')
+      .in('instancia_id', ids.length ? ids : ['00000000-0000-0000-0000-000000000000'])
+      .eq('nome_template', nome).eq('status', 'approved').ilike('categoria', 'utility');
+    const m: Record<string, string> = {};
+    for (const t of tpls || []) m[t.instancia_id] = t.id;
+    return m;
+  };
+  let TEMPLATE = TEMPLATE_EN;
+  let byInst = await buscar(TEMPLATE_EN);
+  if (!Object.keys(byInst).length) { TEMPLATE = TEMPLATE_PT; byInst = await buscar(TEMPLATE_PT); }
+  const ingles = TEMPLATE === TEMPLATE_EN;
+  const nums = Object.keys(byInst).sort(() => Math.random() - 0.5).slice(0, 25);
   if (!nums.length) return json({ success: false, error: 'nenhum número GREEN com o modelo aprovado' }, 400);
 
   // Reserva atômica: duas execuções simultâneas nunca usam os mesmos contatos.
@@ -134,7 +143,7 @@ Deno.serve(async (req) => {
   const meus = leads.filter((l) => ok.has(l.id));
   if (!meus.length) return json({ success: true, pulado: 'contatos já reservados por outra execução' });
   const clientes = meus.map((l) => {
-    const nome = `pessoal da ${l.nome || 'empresa'}`.slice(0, 60);
+    const nome = (ingles ? `${l.nome || 'there'} team` : `pessoal da ${l.nome || 'empresa'}`).slice(0, 60);
     return { telefone: l.telefone, nome, vars: { '1': nome } };
   });
   const resp = await fetch(`${url}/functions/v1/envio-meta-massa-iniciar`, {
