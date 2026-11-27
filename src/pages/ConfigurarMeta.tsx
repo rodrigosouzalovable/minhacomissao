@@ -1338,9 +1338,15 @@ export default function ConfigurarMeta() {
       const [r1, r2] = await Promise.all([q1, q2]);
       erro = r1.error || r2.error;
     } else {
-      let q = base().update({ messaging_limit_manual: valor, messaging_limit_source: "manual" }).eq("meta_bm_id", bmId);
+      let q = base().update({ messaging_limit_manual: valor, messaging_limit_source: "manual", tier_diario: BM_TIER_VALUES[valor] ?? 1000 }).eq("meta_bm_id", bmId);
       if (excluirId) q = q.neq("id", excluirId);
       erro = (await q).error;
+    }
+    if (!erro) {
+      const patchBm = valor === "__auto__"
+        ? { tier_manual: false, tier_ilimitado: false }
+        : { tier_manual: true, tier_ilimitado: valor === "TIER_UNLIMITED", tier_diario: BM_TIER_VALUES[valor] ?? 1000 };
+      erro = (await (supabase as any).from("meta_business_managers").update(patchBm).eq("id", bmId)).error;
     }
     if (erro) toast.error("Erro ao aplicar tier na BM: " + erro.message);
     return !erro;
