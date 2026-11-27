@@ -6,7 +6,7 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { corsHeaders } from 'npm:@supabase/supabase-js@2/cors';
 import { requireCaller } from '../_shared/auth-guard.ts';
-import { textoOferta } from '../_shared/oferta-carteira.ts';
+import { textoCondicaoOdres, textoOferta } from '../_shared/oferta-carteira.ts';
 import { dividirNumeros } from '../_shared/carteira-divisao.ts';
 import { semInstanciasSoLembrete } from '../_shared/instancias-so-lembrete.ts';
 
@@ -14,6 +14,8 @@ const DONO = 'ee649720-b8ce-47a2-859e-100a3a9ae6bb';
 const INICIO = '2026-11-14';
 const NOME = 'Carteira SFTP auto';
 const TEMPLATES = { ume: 'acesse_o_portal_de_negociacao', odres_cred: 'odres_portal_de_negociacao' } as const;
+// Modelo novo da Odres: usado em cada número que já o tem aprovado; os demais seguem no antigo.
+const ODRES_NOVO = 'odres_desbloqueio_aparelho_pix';
 const LIMITE = { ume: 4000, odres_cred: 6000 };
 // Dias sem repetir por credor. Odres em 5 dias para preencher o lote (com 7 dias a base livre não chega a 4.000).
 const DIAS_FADIGA = { ume: 7, odres_cred: 5 };
@@ -97,18 +99,28 @@ Deno.serve(async (req) => {
   const ids = semInstanciasSoLembrete((inst || []).map((i: any) => i.id));
   const { data: tpls } = await db.from('meta_whatsapp_templates').select('id,instancia_id,nome_template')
     .in('instancia_id', ids.length ? ids : ['00000000-0000-0000-0000-000000000000'])
-    .in('nome_template', Object.values(TEMPLATES)).eq('status', 'approved').ilike('categoria', 'utility');
+    .in('nome_template', [...Object.values(TEMPLATES), ODRES_NOVO]).eq('status', 'approved').ilike('categoria', 'utility');
   const por: Record<string, Record<string, string>> = { ume: {}, odres_cred: {} };
+  const odresNovo: Record<string, string> = {};
   for (const t of tpls || []) {
     if (t.nome_template === TEMPLATES.ume) por.ume[t.instancia_id] = t.id;
     if (t.nome_template === TEMPLATES.odres_cred) por.odres_cred[t.instancia_id] = t.id;
+    if (t.nome_template === ODRES_NOVO) odresNovo[t.instancia_id] = t.id;
   }
+  // Com pelo menos 3 números aptos, a campanha da Odres usa só o modelo novo (texto da condição próprio);
+  // até lá continua no modelo antigo, para nunca falhar por falta de aprovação.
+  const usarOdresNovo = Object.keys(odresNovo).filter((i) => por.ume[i]).length >= 3;
+  if (usarOdresNovo) {
+    por.odres_cred = Object.fromEntries(Object.entries(odresNovo).filter(([i]) => por.ume[i]));
+    for (const c of clientes) if (c.credor === 'odres_cred') c.vars['2'] = textoCondicaoOdres(c.saldo);
+  }
+  const tplNome = (cr: 'ume' | 'odres_cred') => cr === 'odres_cred' && usarOdresNovo ? ODRES_NOVO : TEMPLATES[cr];
   const instIds = Object.keys(por.ume).filter((id) => por.odres_cred[id]);
   if (!instIds.length) return json({ success: false, error: 'nenhum número GREEN/desconhecido com os dois modelos Utility', resumo }, 400);
 
   // Mesma caixa do Inbox usada na última campanha manual da carteira.
   const { data: ult } = await db.from('envio_meta_job').select('folder_id').eq('user_id', DONO)
-    .in('template_nome', Object.values(TEMPLATES)).not('nome_campanha', 'ilike', `${NOME}%`)
+    .in('template_nome', [...Object.values(TEMPLATES), ODRES_NOVO]).not('nome_campanha', 'ilike', `${NOME}%`)
     .order('created_at', { ascending: false }).limit(1);
 
   // Uma campanha por credor, cada uma com seus próprios números (sem repetir número entre elas):
@@ -125,16 +137,16 @@ Deno.serve(async (req) => {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}` },
       body: JSON.stringify({
-        asUserId: DONO, template: { id: byInst[nums[0]], nome_template: TEMPLATES[cr] },
+        asUserId: DONO, template: { id: byInst[nums[0]], nome_template: tplNome(cr) },
         instanciaIds: nums, templateIdByInstance: byInst,
-        templateVariantes: [{ credor: cr, nome_template: TEMPLATES[cr], template_id: byInst[nums[0]], template_id_by_instance: byInst }],
+        templateVariantes: [{ credor: cr, nome_template: tplNome(cr), template_id: byInst[nums[0]], template_id_by_instance: byInst }],
         clientes: cli, minSec: 2, maxSec: 4, diasAntirrepeticao: Math.min(DIAS_FADIGA.ume, DIAS_FADIGA.odres_cred),
         nomeCampanha: `${prefixo}${sufixo} ${cr === 'ume' ? 'UME' : 'Odres'}`, folderId: ult?.[0]?.folder_id ?? null,
       }),
     });
     const out = await resp.json().catch(() => ({}));
     ok = ok && resp.ok && out?.success !== false;
-    resultados[cr] = { numeros: nums.length, clientes: cli.length, job_id: out?.job_id, erro: out?.error };
+    resultados[cr] = { template: tplNome(cr), numeros: nums.length, clientes: cli.length, job_id: out?.job_id, erro: out?.error };
   }
   console.log('[carteira-sftp-auto]', JSON.stringify({ resumo, numeros: instIds.length, resultados }));
   return json({ success: ok, clientes: clientes.length, resumo, numeros: instIds.length, resultados }, ok ? 200 : 500);

@@ -26,3 +26,10 @@ export function textoOferta(credor: 'ume' | 'odres_cred', principal: number, mes
   const chamada = mes === 11 ? 'de BLACK FRIDAY de final de ano' : mes === 12 ? 'de final de ano' : 'para quitar seu débito';
   return `*UME com condições especiais ${chamada}. Quite à vista por R$ ${brl(o.avista)}${parcelado}. Pague a 1ª no PIX e volte a comprar a prazo!*`;
 }
+
+// Variável {{2}} do modelo odres_desbloqueio_aparelho_pix ("Condição disponível: {{2}}.").
+export function textoCondicaoOdres(principal: number): string {
+  const o = calcularOferta(principal);
+  const avista = `à vista por R$ ${brl(o.avista)}`;
+  return o.parcelas >= 2 ? `${avista} ou ${o.parcelas}x de R$ ${brl(o.valorParcela)}` : avista;
+}
