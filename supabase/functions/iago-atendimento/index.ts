@@ -1,6 +1,6 @@
 import { decidirParada } from '../_shared/vendas-encerramento.ts';
 import { estadoAtendimentoIcred } from '../_shared/icred-atendimento.ts';
-import { FOLDER_USA_B2B_INBOX, promptVendasUsa, FALLBACK_USA, FALLBACK_USA_EN, pareceIngles } from '../_shared/vendas-usa.ts';
+import { FOLDER_USA_B2B_INBOX, promptVendasUsa, idiomaClienteUsa, precisaReexplicarIdiomaUsa, fallbackVendasUsa } from '../_shared/vendas-usa.ts';
 import { FOLDER_COBRANCA_B2B_INBOX, promptVendasCobranca, FALLBACK_COBRANCA } from '../_shared/vendas-cobranca.ts';
 import { notificarAdmin } from '../_shared/notificar-admin.ts';
 // IAGO — atendente da caixa PADRÃO por rodízio e de toda entrada UAZAPI da AQUECIMENTO.
@@ -307,6 +307,7 @@ Deno.serve(async (req) => {
         texto: String(texto || ''), entradasAnteriores: entradasAnt, respostasIago: saidasIago.length,
         ultimaSaidaMs: saidasIago[0] ? new Date(saidasIago[0].criado_em).getTime() : null,
         agoraMs: Date.now(), interessado: Number(avisos || 0) > 0,
+        esclarecimentoIdioma: mercadoUsa && precisaReexplicarIdiomaUsa(String(texto || '')),
       });
       // USA B2B: saudações automáticas de WhatsApp Business ("Thank you for contacting...")
       // são lidas depois pelo dono; o IAGO responde mesmo assim, limitado pelo teto de respostas.
@@ -1530,6 +1531,11 @@ async function gerarResposta(args: {
     .trim();
 
   if (modoVendas) {
+    const idiomaUsa = idiomaClienteUsa(texto, historico.filter((m) => m.direcao === 'entrada').map((m) => String(m.conteudo || '')).reverse());
+    // Local translation uses the existing inbound flow: no extra AI call, tick or retry.
+    if (mercadoUsa && precisaReexplicarIdiomaUsa(texto)) {
+      return { mensagens: [fallbackVendasUsa(idiomaUsa)], escalar: false, motivo: 'esclarecimento idioma USA' };
+    }
     const conversa = historico.length
       ? historico.map((m) => `${m.direcao === 'entrada' ? 'EMPRESA' : 'VOCÊ'}: ${String(m.conteudo || '').slice(0, 500)}`).join('\n')
       : '(primeira resposta)';
@@ -1544,7 +1550,7 @@ async function gerarResposta(args: {
       'INTERESSE: marque "interessado":true quando a empresa demonstrar interesse real (pergunta preço, como funciona, pacotes, diz que tem lista de clientes, quer fechar ou pede PIX). Em "interesse_resumo" resuma em até 15 palavras.',
       'Responda SOMENTE com JSON válido: {"mensagens":["texto"],"escalar":false,"motivo":"","interessado":false,"interesse_resumo":"","encerrar":false}',
     ].join('\n');
-    const userVendas = `HISTÓRICO:\n${conversa}\n\nÚLTIMA MENSAGEM DA EMPRESA:\n${texto}`;
+    const userVendas = `${mercadoUsa ? `IDIOMA DA RESPOSTA: ${idiomaUsa}.\n` : ''}HISTÓRICO:\n${conversa}\n\nÚLTIMA MENSAGEM DA EMPRESA:\n${texto}`;
     try {
       const out = await chamarIA(systemVendas, userVendas);
       const parsed = extrairJson(out);
@@ -1556,7 +1562,7 @@ async function gerarResposta(args: {
     } catch (e: any) {
       console.error('[IAGO] falha no modo vendas', e?.message || e);
     }
-    return { mensagens: [mercadoCobranca ? FALLBACK_COBRANCA : mercadoUsa ? (pareceIngles(texto) ? FALLBACK_USA_EN : FALLBACK_USA) : 'Era sobre uma ação de vendas de Black Friday e Natal pelo WhatsApp oficial para empresas de Goiânia. Vocês costumam falar com seus clientes pelo WhatsApp?'], escalar: false, motivo: 'fallback vendas' };
+    return { mensagens: [mercadoCobranca ? FALLBACK_COBRANCA : mercadoUsa ? fallbackVendasUsa(idiomaUsa) : 'Era sobre uma ação de vendas de Black Friday e Natal pelo WhatsApp oficial para empresas de Goiânia. Vocês costumam falar com seus clientes pelo WhatsApp?'], escalar: false, motivo: 'fallback vendas' };
   }
 
   if (modoAquecimento) {

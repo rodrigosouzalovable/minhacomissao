@@ -6,3 +6,6 @@ Deno.test('pergunta real continua', () => assertEquals(decidirParada(base), null
 Deno.test('4 respostas sem interesse param', () => assertEquals(decidirParada({ ...base, respostasIago: 4 }), 'sem_progresso'));
 Deno.test('interessado não para por limite', () => assertEquals(decidirParada({ ...base, respostasIago: 6, interessado: true }), null));
 Deno.test('resposta há menos de 2 min é pulada', () => assertEquals(decidirParada({ ...base, ultimaSaidaMs: 1e9 - 60_000 }), 'intervalo'));
+Deno.test('No entiendo após 78s permite esclarecer o idioma', () => assertEquals(decidirParada({ ...base, texto: 'No entiendo', ultimaSaidaMs: 1e9 - 78_000, esclarecimentoIdioma: true }), null));
+Deno.test('esclarecimento não remove limite de 4 respostas', () => assertEquals(decidirParada({ ...base, respostasIago: 4, esclarecimentoIdioma: true }), 'sem_progresso'));
+Deno.test('esclarecimento não permite responder menus automáticos', () => assertEquals(decidirParada({ ...base, texto: 'Digite 1 para cardápio', esclarecimentoIdioma: true }), 'robo'));

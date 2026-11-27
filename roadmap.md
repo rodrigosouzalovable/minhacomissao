@@ -6,6 +6,7 @@
 - [x] Corrigir a localização protegida da conversa e pré-selecionar a ocorrência mais recente para envio do termo.
 
 # Roadmap
+- [x] Corrigir idioma do IAGO USA B2B: 17 testes passaram e função publicada; templates em inglês preparados para cadastro manual, sem trocar campanhas nem enviar resposta retroativa. Envio real ao cliente não testado.
 - [x] Preparar caixa FGTS iCred, roteiro seguro e atalho no painel; caixa e roteiro conferidos no acesso real, dois testes passaram e IAGO desativado conforme escolha do usuário, sem campanhas ou novas rotinas.
 - [x] Repescagem automática da 1ª parcela (D+1 a D+3, 1/dia, nova_parcela_vencida_2) na rotina de recuperação das 09:30; testes passaram.
 - [x] Escala da campanha diária da carteira: corte de 1.000 clientes corrigido, Odres com 5 dias sem repetir, duas campanhas (UME/Odres) com números separados e complemento de hoje lançado; campanha recém-criada não encerra mais antes de gravar os contatos.

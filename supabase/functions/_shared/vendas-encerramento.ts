@@ -23,10 +23,10 @@ export type MotivoEncerrar = 'robo' | 'sem_progresso' | 'intervalo' | null;
 /** Decide antes de chamar a IA. 'intervalo' só pula esta mensagem; os outros encerram a conversa. */
 export function decidirParada(p: {
   texto: string; entradasAnteriores: string[]; respostasIago: number; ultimaSaidaMs: number | null;
-  agoraMs: number; interessado: boolean;
+  agoraMs: number; interessado: boolean; esclarecimentoIdioma?: boolean;
 }): MotivoEncerrar {
   if (pareceRobo(p.texto, p.entradasAnteriores)) return 'robo';
   if (!p.interessado && p.respostasIago >= MAX_RESPOSTAS_SEM_INTERESSE) return 'sem_progresso';
-  if (p.ultimaSaidaMs && p.agoraMs - p.ultimaSaidaMs < INTERVALO_MIN_MS) return 'intervalo';
+  if (!p.esclarecimentoIdioma && p.ultimaSaidaMs && p.agoraMs - p.ultimaSaidaMs < INTERVALO_MIN_MS) return 'intervalo';
   return null;
 }
