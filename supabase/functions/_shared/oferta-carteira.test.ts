@@ -24,8 +24,8 @@ Deno.test('texto Odres igual ao usado nas campanhas manuais', () => {
 
 Deno.test('condição do modelo de desbloqueio Odres', () => {
   assertEquals(textoCondicaoOdres(150), 'à vista por R$ 150,00');
-  assertEquals(textoCondicaoOdres(1573), 'à vista por R$ 1.573,00 ou parcelado: • 3x de R$ 576,77 • 7x de R$ 247,19 • 10x de R$ 173,03 • 14x de R$ 123,59 • 17x de R$ 101,78');
-  assertEquals(textoCondicaoOdres(350), 'à vista por R$ 350,00 ou parcelado: • 2x de R$ 192,50 • 3x de R$ 128,33');
+  assertEquals(textoCondicaoOdres(1573), 'à vista por R$ 1.573,00 ou parcelado: • 3x de R$ 576,77 • 7x de R$ 247,19 • 10x de R$ 173,03 • 14x de R$ 123,59 • 17x de R$ 101,78. As parcelas são mensais, não quinzenais');
+  assertEquals(textoCondicaoOdres(350), 'à vista por R$ 350,00 ou parcelado: • 2x de R$ 192,50 • 3x de R$ 128,33. As parcelas são mensais, não quinzenais');
 });
 
 Deno.test('até 5 opções de parcelas, sempre incluindo o máximo', () => {

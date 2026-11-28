@@ -44,5 +44,5 @@ export function textoCondicaoOdres(principal: number): string {
   const total = o.avista * (1 + ACRESCIMO_PARCELADO);
   const linhas = opcoesParcelas(o.parcelas).map((n) => `• ${n}x de R$ ${brl(Math.round((total / n) * 100) / 100)}`);
   // A Meta recusa variáveis com quebra de linha (erro 132018): marcadores na mesma linha.
-  return `${avista} ou parcelado: ${linhas.join(' ')}`;
+  return `${avista} ou parcelado: ${linhas.join(' ')}. As parcelas são mensais, não quinzenais`;
 }
